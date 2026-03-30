@@ -1,28 +1,35 @@
 """
 dataset.py
 ==========
-Caricamento e preprocessing dei dati GN2 da file HDF5 con struttura:
-  /jets          — variabili jet-level (una riga per jet)
-  /tracks        — variabili track-level (una riga per traccia)
-  /eventwise     — variabili evento
-  /truth_hadrons — truth hadron info
+High-performance GN2 data pipeline for HDF5 datasets. 
+Optimized for Large-Scale Jet Flavour Tagging at ATLAS.
 
-La struttura /tracks è un array "piatto" di tracce, raggruppate per jet
-tramite un offset/count implicito nell'ordine delle righe: le prime N0
-righe appartengono al jet 0, le successive N1 al jet 1, ecc.
-Il numero di tracce per jet è variabile; si usa la colonna "valid"
-come maschera di qualità.
+HDF5 Structure:
+  /jets          — Jet-level features (1 row per jet).
+  /tracks        — Track-level features (Jagged or fixed-size array indexed by jet).
+  /eventwise     — Event-level metadata (e.g., eventNumber, mu).
+  /truth_hadrons — Simulation truth for hadron labeling and performance studies.
 
-Pipeline:
-  1. Leggi /jets e /tracks
-  2. Filtra jet (pT, η, JVT, label valido)
-  3. Filtra tracce (colonna valid == True)
-  4. Per ogni jet: estrai le sue tracce, applica padding a max_tracks,
-     costruisci la maschera booleana
-  5. Concatena jet features alle track features (broadcast)
-  6. Normalizza (fit solo su train)
-  7. Re-sampling 2D (pT, η) per bilanciare le classi
-  8. Restituisce DataLoader PyTorch
+The pipeline utilizes 'Lazy Loading' via h5py to handle datasets that exceed 
+available RAM, using NumPy vectorization for high-speed feature extraction.
+
+Pipeline Workflow:
+  1. Index Splitting: Generate Train/Val/Test indices using scikit-learn's 
+     train_test_split to ensure zero data leakage.
+  2. Data Loading: On-the-fly extraction of jet and track features using 
+     global indices to map to the HDF5 file structure.
+  3. Track Quality Filtering: Active filtering of track candidates using 
+      the 'valid' boolean flag before processing.
+  4. Padding & Masking: Enforce a fixed-size track array (default max_tracks=40). 
+     Generate a boolean padding mask to inform the Transformer's Self-Attention 
+     mechanism which inputs to ignore.
+  5. Feature Engineering: 
+     - Jet-level: Log-transformation of pT and Z-score standardization.
+     - Track-level: Z-score standardization (mu and sigma computed ONLY on training set).
+  6. Class Balancing: Optional 2D re-sampling (pT, eta) to flatten the 
+     background distributions and match the reference class (c-jets).
+  7. Integration: Wraps the logic into a PyTorch DataLoader with 
+     multi-process worker support and pinned memory for GPU acceleration.
 """
 
 import logging
@@ -95,12 +102,12 @@ class GN2Dataset(Dataset):
         self.jet_vars = jet_vars or self.JET_VARS_DEFAULT
         self.track_vars = track_vars or self.TRACK_VARS_DEFAULT
 
-        # Inizializziamo l'handler del file come None per il multiprocessing (PyTorch workers)
+        # initialize h5py file handler as None; will be opened lazily in _get_handler()
         self.handler = None
 
         self.norm_stats = norm_stats
         
-        # Initial check
+        # initial check
         try:
             with h5py.File(self.file_path, 'r') as f:
                 self.n_jets = len(f['jets'])
@@ -118,7 +125,7 @@ class GN2Dataset(Dataset):
             h5py.File: h5py file object open.
         """
         if self.handler is None:
-            self.handler = h5py.File(self.file_path, 'r', swmr=True)        # swmr=True permette allows multiple readers (for num_workers > 0)
+            self.handler = h5py.File(self.file_path, 'r', swmr=True)        # swmr=True allows multiple readers (for num_workers > 0)
         return self.handler
 
     @property
@@ -166,10 +173,19 @@ class GN2Dataset(Dataset):
         # 1. Loading Jet Features and normalization
         jet_data = f['jets'][real_idx]
         
-        # pT log-trasformation
         jet_pt = jet_data['pt']
-        jet_pt_log = np.log(jet_pt)
         jet_eta = jet_data['eta']
+        # pt log-trasformation
+        jet_pt_log = np.log(jet_pt)
+
+        if self.norm_stats and 'jet_mu' in self.norm_stats and 'jet_sigma' in self.norm_stats:
+            if len(self.norm_stats['jet_mu']) < 2 or len(self.norm_stats['jet_sigma']) < 2:
+                logger.warning("Normalization stats for jets are incomplete. Expected at least 2 values for 'jet_mu' and 'jet_sigma'. Using raw values.")
+            else:
+                jet_pt_log = (jet_pt_log - self.norm_stats['jet_mu'][0]) / self.norm_stats['jet_sigma'][0]
+                jet_eta = (jet_eta - self.norm_stats['jet_mu'][1]) / self.norm_stats['jet_sigma'][1]
+        else:
+            logger.info("Normalization stats not provided for jets. Using raw values.")
         
         jet_features = np.array([jet_pt_log, jet_eta], dtype=np.float32)
         
@@ -179,24 +195,28 @@ class GN2Dataset(Dataset):
 
         # 3. Loading Tracks with 'valid' Filter (Optimized with slicing)
         tracks_all = f['tracks'][real_idx]
-        
         # bool mask
-        valid_mask_in_file = tracks_all['valid'] == True
-        valid_tracks = tracks_all[valid_mask_in_file]
+        valid_tracks = tracks_all[tracks_all['valid'] == True]
         
         n_available = len(valid_tracks)
         n_to_read = min(n_available, self.n_tracks)
 
-        # Pre-allocate arrays for track features and mask
+        # pre-allocate arrays for track features and mask
         track_features = np.zeros((self.n_tracks, len(self.track_vars)), dtype=np.float32)
         padding_mask = np.zeros(self.n_tracks, dtype=bool)
 
-        # Vectorized extraction: read features for available tracks
+        # vectorized extraction: read features for available tracks
         if n_to_read > 0:
             for i, var in enumerate(self.track_vars):
                 raw_values = valid_tracks[var][:n_to_read]
                 # normalization
-                track_features[:n_to_read, i] = (raw_values - self.norm_stats['track_mu']) / self.norm_stats['track_sigma']
+                if self.norm_stats and 'track_mu' in self.norm_stats and 'track_sigma' in self.norm_stats:
+                    mu = self.norm_stats['track_mu'][i]
+                    sigma = self.norm_stats['track_sigma'][i]
+                    track_features[:n_to_read, i] = (raw_values - mu) / sigma
+                else:
+                    logger.info(f"Normalization stats not provided for track variable '{var}'. Using raw values.")
+                    track_features[:n_to_read, i] = raw_values
             
             padding_mask[:n_to_read] = True
 
@@ -209,39 +229,53 @@ class GN2Dataset(Dataset):
 
 if __name__ == "__main__":
 
-    PATH = '../../dataset/mc-flavtag-ttbar-small.h5'
+    # Example usage and testing of the dataset
 
-    # dataset = GN2Dataset(PATH)
-    # dataloader = DataLoader(
-    #     dataset, 
-    #     batch_size=1024,
-    #     shuffle=True, 
-    #     num_workers=4,
-    #     pin_memory=True
-    # )
+    from sklearn.model_selection import train_test_split
+    from utils import compute_normalization_stats
 
-    # # Test
-    # sample = dataset[0]
-    
-    # logger.info(f"Batch loaded.")
-    # logger.info(f"Shape:\t\t{dataset.shape}")
-    # logger.info(f"Shape jets:\t{sample['jet_features'].shape}")
-    # logger.info(f"Shape tracks:\t{sample['track_features'].shape}")
-    # logger.info(f"Numero tracce valide nel sample: {sample['mask'].sum().item()}")
-    # logger.info(f"Esempio jet features (norm): {sample['jet_features']}")
-    # logger.info(f"Target:\t{sample['label']}")
+    PATH = "/home/lnasini/Desktop/PROGETTO_CMEPDA/CMEPDA_project_transformer_jet_tagging/dataset/mc-flavtag-ttbar-small.h5"
 
-    # 1. Prendi tutti gli indici e dividili
     with h5py.File(PATH, 'r') as f:
-        total_n = len(f['jets'])
+        pt = f['jets']['pt']
+        eta = f['jets']['eta']
     
-    indices = np.arange(total_n)
-    np.random.shuffle(indices)
-    train_indices = indices[:int(0.7*total_n)]
-    
-    # 2. Qui calcoleresti le stats solo su train_indices...
-    my_norm_stats = { ... } 
+    n_jets_total   = len(pt)
+    kinematic_mask = (pt > 20_000) & (pt < 250_000) & (np.abs(eta) < 2.5)
+    valid_indices = np.where(kinematic_mask)[0]
 
-    # 3. Crei il dataset di training
-    train_dataset = GN2Dataset(PATH, indices=train_indices, norm_stats=my_norm_stats)
-    loader = DataLoader(train_dataset, batch_size=1024, num_workers=4)
+    splitting = [0.5, 0.3, 0.2]
+
+    training_indices, test_indices = train_test_split(
+        valid_indices, 
+        train_size=splitting[0] + splitting[1], 
+        random_state=42, 
+        shuffle=True
+    )
+    train_indices, val_indices = train_test_split(
+        training_indices, 
+        train_size=splitting[0] / (splitting[0] + splitting[1]),
+        random_state=42, 
+        shuffle=True
+    )
+
+    norm_stats = compute_normalization_stats(PATH, train_indices)
+
+    logger.info(f"Split completed: Train={len(train_indices)}, Val={len(val_indices)}, Test={len(test_indices)}")
+    train_dataset = GN2Dataset(PATH, indices=train_indices, norm_stats=norm_stats)
+    val_dataset   = GN2Dataset(PATH, indices=val_indices,   norm_stats=norm_stats)
+    test_dataset  = GN2Dataset(PATH, indices=test_indices,  norm_stats=norm_stats)
+
+    train_loader = DataLoader(train_dataset, batch_size=1024, shuffle=True, num_workers=4)
+    val_loader   = DataLoader(val_dataset,   batch_size=1024, shuffle=False, num_workers=4)
+    test_loader  = DataLoader(test_dataset,  batch_size=1024, shuffle=False, num_workers=4)
+
+    # Test
+    sample = train_dataset[0]
+    
+    logger.info(f"Batch loaded.")
+    logger.info(f"Shape:                {train_dataset.shape}")
+    logger.info(f"Shape jets:           {sample['jet_features'].shape}")
+    logger.info(f"Shape tracks:         {sample['track_features'].shape}")
+    logger.info(f"Num. valid tracks:    {sample['mask'].sum()}")
+    logger.info(f"Target:               {sample['label']}")
