@@ -44,13 +44,10 @@ CMEPDA_project_transformer_jet_tagging/
 Python 3.13+ with:
 
 ```
-torch>=2.0.0
-numpy>=1.24.0
-h5py>=3.8.0
-scikit-learn>=1.2.0
-matplotlib>=3.7.0
-pyyaml>=6.0
-tqdm>=4.65.0
+torch>=2.10.0
+numpy>=2.4.0
+h5py>=3.16.0
+scikit-learn>=1.8.0
 ```
 
 ---

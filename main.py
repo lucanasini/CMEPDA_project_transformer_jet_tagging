@@ -1,11 +1,11 @@
 import json
 import logging
+from pathlib import Path
 
 import src.trasformer_jet_tagging.utils as utils
 from src.trasformer_jet_tagging.dataset import GN2Dataset
 
 import numpy as np
-from pathlib import Path
 import h5py
 import torch
 from torch.utils.data import DataLoader
