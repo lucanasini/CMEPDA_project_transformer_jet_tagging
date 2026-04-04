@@ -89,6 +89,7 @@
   "output": {
     "save_dir": "/home/lnasini/Desktop/PROGETTO_CMEPDA/CMEPDA_project_transformer_jet_tagging/outputs/",
     "save_norm_stats": "/home/lnasini/Desktop/PROGETTO_CMEPDA/CMEPDA_project_transformer_jet_tagging/outputs/norm_stats.json",
+    "preprocess_dir": "/home/lnasini/Desktop/PROGETTO_CMEPDA/CMEPDA_project_transformer_jet_tagging/outputs/preprocess",
     "save_best": true,
     "save_last": true,
     "plot_roc": true,

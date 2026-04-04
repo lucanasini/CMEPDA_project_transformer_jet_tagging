@@ -38,7 +38,7 @@ from typing import Dict, Tuple, Optional
 import h5py
 import numpy as np
 import torch
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 
 # logging configuration
 if __name__ == "__main__":
@@ -246,26 +246,134 @@ class GN2Dataset(Dataset):
 
 if __name__ == "__main__":
 
-    # Example usage and testing of the dataset
+    import argparse
+    import sys
     from utils import compute_normalization_stats
+    from sklearn.model_selection import train_test_split
 
-    PATH = "/home/lnasini/Desktop/PROGETTO_CMEPDA/CMEPDA_project_transformer_jet_tagging/dataset/mc-flavtag-ttbar-small.h5"
+    parser = argparse.ArgumentParser(
+        description="Test for GN2Dataset: loads a sample, checks shapes and normalization."
+    )
+    parser.add_argument(
+        "--file",
+        type=str,
+        required=True,
+        help="Path to the HDF5 file.",
+    )
+    parser.add_argument(
+        "--n-tracks",
+        type=int, 
+        default=40,
+        help="Maximum number of tracks per jet (default: 40)."
+    )
+    parser.add_argument(
+        "--n-jets",
+        type=int,
+        default=None,
+        help="Limit the test to the first N jets (default: all)."
+    )
+    parser.add_argument(
+        "--train-frac",
+        type=float,
+        default=0.7,
+        help="Fraction of jets used for the training split (default: 0.7)."
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Random seed for the train/test split (default: 42)."
+    )
+    args = parser.parse_args()
 
-    with h5py.File(PATH, 'r') as f:
-        n_jets = len(f['jets'])
-        logger.info(f"Total jets in file: {n_jets}")
-        indices = np.arange(n_jets)
+    try:
+        with h5py.File(args.file, 'r') as f:
+            n_total = len(f['jets'])
+    except (FileNotFoundError, KeyError) as e:
+        logger.error(f"Cannot open HDF5 file: {e}")
+        sys.exit(1)
 
-    norm_stats = compute_normalization_stats(PATH, indices)
+    n_jets  = n_total if args.n_jets is None else min(args.n_jets, n_total)
+    indices = np.arange(n_jets)
+    logger.info(f"Total jets in file: {n_total:,}")
+    logger.info(f"Jets used for test: {n_jets:,}")
 
-    dataset = GN2Dataset(PATH, indices=indices, norm_stats=norm_stats)
+    train_indices, test_indices = train_test_split(
+        indices,
+        train_size=args.train_frac,
+        random_state=args.seed,
+        shuffle=True
+    )
+    logger.info(f"Split - train: {len(train_indices):,}  test: {len(test_indices):,}")
 
-    # Test
-    sample = dataset[0]
-    
-    logger.info(f"Batch loaded.")
-    logger.info(f"Shape:                {dataset.shape}")
-    logger.info(f"Shape jets:           {sample['jet_features'].shape}")
-    logger.info(f"Shape tracks:         {sample['track_features'].shape}")
-    logger.info(f"Num. valid tracks:    {sample['mask'].sum()}")
-    logger.info(f"Target:               {sample['label']}")
+    logger.info("Computing normalization statistics on training set ...")
+    norm_stats = compute_normalization_stats(args.file, train_indices)
+
+    train_dataset = GN2Dataset(
+        args.file,
+        indices=train_indices,
+        n_tracks=args.n_tracks,
+        norm_stats=norm_stats
+    )
+    test_dataset  = GN2Dataset(
+        args.file,
+        indices=test_indices,
+        n_tracks=args.n_tracks,
+        norm_stats=norm_stats
+    )
+
+
+    sample = train_dataset[0]
+    expected = {
+        "jet_features":   (len(JET_VARS_DEFAULT),),
+        "track_features": (args.n_tracks, len(TRACK_VARS_DEFAULT)),
+        "mask":           (args.n_tracks,),
+        "label":          (),
+    }
+    all_ok = True
+    for key, exp_shape in expected.items():
+        got = tuple(sample[key].shape)
+        status = "OK" if got == exp_shape else "FAIL"
+        if status == "FAIL":
+            all_ok = False
+        logger.info(f"  {key:<20} expected {str(exp_shape):<25} got {str(got):<25} [{status}]")
+
+    n_valid = sample["mask"].sum().item()
+    logger.info(f"  valid tracks in sample[0] : {n_valid} / {args.n_tracks}")
+    logger.info(f"  label in sample[0]        : {sample['label'].item()}"
+                f" ({[k for k,v in JET_FLAVOUR_MAP.items() if v == sample['label'].item()]})")
+
+    # ------------------------------------------------------------------
+    # 6. Normalization sanity check on a small batch
+    # ------------------------------------------------------------------
+    logger.info("--- Normalization sanity check (first 1000 training jets) ---")
+
+    n_check = min(1_000, len(train_dataset))
+    jet_pts, jet_etas = [], []
+    for i in range(n_check):
+        s = train_dataset[i]
+        jet_pts.append(s["jet_features"][0].item())
+        jet_etas.append(s["jet_features"][1].item())
+
+    jet_pts  = np.array(jet_pts)
+    jet_etas = np.array(jet_etas)
+    logger.info(f"  jet pt  (normalized) — mean: {jet_pts.mean():.4f}  std: {jet_pts.std():.4f}  (expect ~0, ~1)")
+    logger.info(f"  jet eta (normalized) — mean: {jet_etas.mean():.4f}  std: {jet_etas.std():.4f}  (expect ~0, ~1)")
+
+    # ------------------------------------------------------------------
+    # 7. __len__ consistency
+    # ------------------------------------------------------------------
+    logger.info("--- Length consistency ---")
+    assert len(train_dataset) == len(train_indices), "train __len__ mismatch"
+    assert len(test_dataset)  == len(test_indices),  "test  __len__ mismatch"
+    logger.info(f"  train_dataset.__len__() = {len(train_dataset):,}  OK")
+    logger.info(f"  test_dataset.__len__()  = {len(test_dataset):,}  OK")
+
+    # ------------------------------------------------------------------
+    # Summary
+    # ------------------------------------------------------------------
+    if all_ok:
+        logger.info("All checks passed.")
+    else:
+        logger.error("One or more shape checks failed. See above.")
+        sys.exit(1)
