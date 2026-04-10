@@ -9,7 +9,7 @@ import numpy as np
 import h5py
 from sklearn.preprocessing import StandardScaler
 
-logger = logging.getLogger("GN2DataLoader")
+logger = logging.getLogger("GN2.utils")
 
 JET_VARS_DEFAULT = ['pt', 'eta']
 TRACK_VARS_DEFAULT = [
@@ -67,10 +67,11 @@ def compute_normalization_stats(
 
     with h5py.File(file_path, 'r') as f:
 
-        for jvar, tvar in zip(jet_vars, track_vars):
+        for jvar in jet_vars:
             if jvar not in f['jets'].dtype.names:
                 logger.warning(f"Jet variable '{jvar}' not found in HDF5 file. Skipping this variable for normalization stats.")
                 jet_vars.remove(jvar)
+        for tvar in track_vars:
             if tvar not in f['tracks'].dtype.names:
                 logger.warning(f"Track variable '{tvar}' not found in HDF5 file. Skipping this variable for normalization stats.")
                 track_vars.remove(tvar)

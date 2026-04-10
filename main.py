@@ -5,6 +5,7 @@ main.py
 import json
 import logging
 from pathlib import Path
+import time
 
 import src.trasformer_jet_tagging.utils as utils
 from src.trasformer_jet_tagging.dataset import GN2Dataset
@@ -14,14 +15,16 @@ import torch
 from torch.utils.data import DataLoader
 
 logging.basicConfig(
-    level  = logging.INFO,
+    level  = logging.DEBUG,
     format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger("GN2")
 
 if __name__ == "__main__":
     # load configuration
-    config = utils.load_config_json("/home/lnasini/Desktop/PROGETTO_CMEPDA/CMEPDA_project_transformer_jet_tagging/src/trasformer_jet_tagging/configs/config.json")
+    BASE_DIR = Path(__file__).resolve().parent
+    config_path = BASE_DIR / "configs" / "config.json"
+    config = utils.load_config_json(config_path)
 
     # extract configuration parameters
     file_path      = config["data"]["h5_path"]
@@ -30,7 +33,7 @@ if __name__ == "__main__":
     jet_vars   = config["data"]["jet_features"]
     track_vars = config["data"]["track_features"]
     label_vars = config["data"]["label"]
-    label_map  = config["data"]["label_map"]
+    label_map  = {int(k): v for k, v in config["data"]["label_map"].items()}
 
     training_batch_size = config["training"].get("batch_size", 1024)
     shuffle_var         = config["data"].get("shuffle", False)
@@ -47,20 +50,17 @@ if __name__ == "__main__":
     ]
 
     if not all(p.exists() for p in artifacts_dir):
-        logger.info("Preprocessing artifacts not found. Running preprocess.py ...")
+        logger.info("Preprocessing files not found. Running preprocess script ...")
         import src.trasformer_jet_tagging.preprocess as preprocess
-        preprocess.main(config_path="src/trasformer_jet_tagging/configs/config.json")
+        preprocess.main(config_path=config_path)
 
-    for path in [idx_dir / "train_indices.npy",
-                 idx_dir / "val_indices.npy",
-                 idx_dir / "test_indices.npy",
-                 norm_path]:
+    for path in artifacts_dir:
         if not path.exists():
             raise FileNotFoundError(f"Preprocessing artifact not found: {path}\nRun preprocess.py first.")
 
-    train_indices = np.load(idx_dir / "train_indices.npy")
-    val_indices   = np.load(idx_dir / "val_indices.npy")
-    test_indices  = np.load(idx_dir / "test_indices.npy")
+    train_indices = np.load(artifacts_dir[0])
+    val_indices   = np.load(artifacts_dir[1])
+    test_indices  = np.load(artifacts_dir[2])
 
     with open(norm_path, "r") as f:
         norm_stats = {k: np.array(v) for k, v in json.load(f).items()}
@@ -87,6 +87,8 @@ if __name__ == "__main__":
     val_dataset   = GN2Dataset(indices=val_indices,   **common_kwargs)
     test_dataset  = GN2Dataset(indices=test_indices,  **common_kwargs)
 
+    start = time.time()
+
     train_loader = DataLoader(train_dataset, shuffle=shuffle_var, **loader_kwargs)
     val_loader   = DataLoader(val_dataset,   shuffle=False,       **loader_kwargs)
     test_loader  = DataLoader(test_dataset,  shuffle=False,       **loader_kwargs)
@@ -95,3 +97,4 @@ if __name__ == "__main__":
     logger.debug(f"Jets shape:   {batch['jet_features'].shape}")
     logger.debug(f"Tracks shape: {batch['track_features'].shape}")
     logger.debug(f"Labels shape: {batch['label'].shape}")
+    logger.debug(f"Time elapsed: {time.time() - start}")

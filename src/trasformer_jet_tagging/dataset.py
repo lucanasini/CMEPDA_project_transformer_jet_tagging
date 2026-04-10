@@ -41,14 +41,7 @@ import torch
 from torch.utils.data import Dataset
 
 # logging configuration
-if __name__ == "__main__":
-    logging.basicConfig(
-        level  = logging.INFO,
-        format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
-    logger = logging.getLogger("GN2_dataset")
-else:
-    logger = logging.getLogger("GN2")
+logger = logging.getLogger("GN2.dataset")
 
 JET_FLAVOUR_MAP = {0: 0, 4: 1, 5: 2, 15: 3}  # light, c, b, tau
 JET_FLAVOUR = 'HadronConeExclTruthLabelID'
@@ -120,6 +113,8 @@ class GN2Dataset(Dataset):
         self.jet_flavour = jet_flavour
         self.jet_flavour_map = jet_flavour_map
         self.norm_stats = norm_stats
+        if norm_stats is None:
+            logger.warning("No norm_stats provided — raw values will be used.")
 
         # initialize h5py file handler as None; will be opened lazily in _get_handler()
         self.handler = None
@@ -142,7 +137,11 @@ class GN2Dataset(Dataset):
             h5py.File: h5py file object open.
         """
         if self.handler is None:
-            self.handler = h5py.File(self.file_path, 'r', swmr=True)        # swmr=True allows multiple readers (for num_workers > 0)
+            try:
+                self.handler = h5py.File(self.file_path, 'r', swmr=True)        # swmr=True allows multiple readers (for num_workers > 0)
+            except OSError:
+                logger.warning("SWMR mode not supported on this filesystem. Standard read.")
+                self.handler = h5py.File(self.file_path, 'r')
         return self.handler
 
     @property
@@ -201,8 +200,6 @@ class GN2Dataset(Dataset):
             else:
                 jet_pt_log = (jet_pt_log - self.norm_stats['jet_mu'][0]) / self.norm_stats['jet_sigma'][0]
                 jet_eta    = (jet_eta - self.norm_stats['jet_mu'][1]) / self.norm_stats['jet_sigma'][1]
-        else:
-            logger.info("Normalization stats not provided for jets. Using raw values.")
         
         jet_features = np.array([jet_pt_log, jet_eta], dtype=np.float32)
         

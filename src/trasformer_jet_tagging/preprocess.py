@@ -78,21 +78,21 @@ def main(config_path: str):
     # 1. load configuration
     config = utils.load_config_json(config_path)
 
-    file_path    = config["data"]["h5_path"]
-    pt_min       = config["data"]["pt_min_mev"]
-    pt_max       = config["data"]["pt_max_mev"]
-    eta_max      = config["data"]["eta_max"]
-    split_fracs  = (
+    file_path   = config["data"]["h5_path"]
+    pt_min      = config["data"]["pt_min_mev"]
+    pt_max      = config["data"]["pt_max_mev"]
+    eta_max     = config["data"]["eta_max"]
+    split_fracs = (
         config["data"]["train_fraction"],
         config["data"]["val_fraction"],
         config["data"]["test_fraction"],
     )
-    shuffle      = config["data"].get("shuffle", False)
-    seed         = config["data"].get("split_seed", 42)
-    jet_vars     = config["data"]["jet_features"]
-    track_vars   = config["data"]["track_features"]
-    batch_size   = config["data"].get("batch_size", 10_000)
-    output_dir   = Path(config["output"]["preprocess_dir"])
+    shuffle     = config["data"].get("shuffle", False)
+    seed        = config["data"].get("split_seed", 42)
+    jet_vars    = config["data"]["jet_features"]
+    track_vars  = config["data"]["track_features"]
+    batch_size  = config["data"].get("batch_size", 10_000)
+    output_dir  = Path(config["output"]["preprocess_dir"])
 
     # 2. kinematic selection
     logger.info(f"Reading kinematics from {file_path} ...")

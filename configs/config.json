@@ -1,6 +1,6 @@
 {
   "data": {
-    "h5_path": "/home/lnasini/Desktop/PROGETTO_CMEPDA/CMEPDA_project_transformer_jet_tagging/dataset/mc-flavtag-ttbar-small.h5",
+    "h5_path": "dataset/mc-flavtag-ttbar-small.h5",
 
     "max_tracks": 40,
 
@@ -87,9 +87,9 @@
     ]
   },
   "output": {
-    "save_dir": "/home/lnasini/Desktop/PROGETTO_CMEPDA/CMEPDA_project_transformer_jet_tagging/outputs/",
-    "save_norm_stats": "/home/lnasini/Desktop/PROGETTO_CMEPDA/CMEPDA_project_transformer_jet_tagging/outputs/norm_stats.json",
-    "preprocess_dir": "/home/lnasini/Desktop/PROGETTO_CMEPDA/CMEPDA_project_transformer_jet_tagging/outputs/preprocess",
+    "save_dir": "outputs/",
+    "save_norm_stats": "outputs/norm_stats.json",
+    "preprocess_dir": "outputs/preprocess",
     "save_best": true,
     "save_last": true,
     "plot_roc": true,

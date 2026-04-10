@@ -19,7 +19,6 @@ Usage:
 import argparse
 import json
 import logging
-import math
 from pathlib import Path
 
 import numpy as np
@@ -32,7 +31,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 import src.trasformer_jet_tagging.utils as utils
 from src.trasformer_jet_tagging.dataset import GN2Dataset
-from model import GN2
+from src.trasformer_jet_tagging.model import GN2
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -146,7 +145,7 @@ def build_scheduler(optimiser, n_total_steps: int, warmup_frac: float = 0.01) ->
         if step < n_warmup:
             return step / n_warmup                           # linear warmup
         progress = (step - n_warmup) / max(1, n_total_steps - n_warmup)
-        cosine   = 0.5 * (1 + math.cos(math.pi * progress))
+        cosine   = 0.5 * (1 + np.cos(np.pi * progress))
         # scale so minimum is ~1e-5 / peak  (paper uses 1e-5 final lr)
         return max(cosine, 1e-5 / 5e-4)
 
