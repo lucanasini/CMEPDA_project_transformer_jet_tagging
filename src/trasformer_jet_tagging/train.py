@@ -385,8 +385,7 @@ def main(config_path: str, overrides: dict) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="GN2 training")
-    parser.add_argument("--config", type=str,
-                        default="src/trasformer_jet_tagging/configs/config.json")
+    parser.add_argument("--config", type=str, default="configs/config.json")
     parser.add_argument("--epochs",      type=int,   default=None)
     parser.add_argument("--lr",          type=float, default=None)
     parser.add_argument("--batch-size",  type=int,   default=None)

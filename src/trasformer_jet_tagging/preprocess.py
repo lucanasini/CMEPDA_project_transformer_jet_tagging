@@ -22,7 +22,6 @@ Usage:
     python preprocess.py --config configs/config.json
 """
 
-import argparse
 import json
 import logging
 from pathlib import Path
@@ -144,7 +143,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--config",
         type=str,
-        default="src/trasformer_jet_tagging/configs/config.json",
+        default="configs/config.json",
         help="Path to the JSON configuration file.",
     )
     args = parser.parse_args()

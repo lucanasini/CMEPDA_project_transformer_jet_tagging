@@ -2,6 +2,7 @@
 main.py
 '''
 
+import argparse
 import json
 import logging
 from pathlib import Path
@@ -9,6 +10,7 @@ import time
 
 import src.trasformer_jet_tagging.utils as utils
 from src.trasformer_jet_tagging.dataset import GN2Dataset
+import src.trasformer_jet_tagging.plotting as plotting
 
 import numpy as np
 import torch
@@ -21,9 +23,24 @@ logging.basicConfig(
 logger = logging.getLogger("GN2")
 
 if __name__ == "__main__":
+
+    parser = argparse.ArgumentParser(description="GN2 preprocessing pipeline")
+    parser.add_argument(
+        "--config",
+        type=str,
+        default="configs/config.json",
+        help="Path to the JSON configuration file.",
+    )
+    parser.add_argument(
+        "--debug-frac",
+        type=float,
+        default=1.0,
+        help="Fraction of data to use (es. 0.05 per il 5%%)"
+    )
+    args = parser.parse_args()
+    config_path = Path(args.config)
+    debug_frac = args.debug_frac
     # load configuration
-    BASE_DIR = Path(__file__).resolve().parent
-    config_path = BASE_DIR / "configs" / "config.json"
     config = utils.load_config_json(config_path)
 
     # extract configuration parameters
@@ -62,6 +79,13 @@ if __name__ == "__main__":
     val_indices   = np.load(artifacts_dir[1])
     test_indices  = np.load(artifacts_dir[2])
 
+    if debug_frac < 1.0:
+        rng = np.random.default_rng(seed=42)
+        train_indices = rng.choice(train_indices, size=int(len(train_indices) * debug_frac), replace=False)
+        val_indices   = rng.choice(val_indices,   size=int(len(val_indices)   * debug_frac), replace=False)
+        test_indices  = rng.choice(test_indices,  size=int(len(test_indices)  * debug_frac), replace=False)
+        logger.info(f"Debug mode: {debug_frac*100:.0f}% dei dati")
+
     with open(norm_path, "r") as f:
         norm_stats = {k: np.array(v) for k, v in json.load(f).items()}
 
@@ -98,3 +122,5 @@ if __name__ == "__main__":
     logger.debug(f"Tracks shape: {batch['track_features'].shape}")
     logger.debug(f"Labels shape: {batch['label'].shape}")
     logger.debug(f"Time elapsed: {time.time() - start}")
+
+    # plotting.plot_var(train_loader)
