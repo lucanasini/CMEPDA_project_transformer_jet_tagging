@@ -33,7 +33,7 @@
     "val_fraction":   0.3,
     "test_fraction":  0.2,
 
-    "batch_size": 10000,
+    "batch_size": 1024,
     "shuffle": true,
     "split_seed": 42
   },
@@ -60,8 +60,8 @@
   },
   "training": {
     "max_epochs": 100,
-    "batch_size": 12000,
-    "num_workers": 4,
+    "batch_size": 1024,
+    "num_workers": 0,
     "early_stopping_patience": 15,
     "optimizer": "adamw",
     "weight_decay": 1.0e-05,

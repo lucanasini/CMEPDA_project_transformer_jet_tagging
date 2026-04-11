@@ -110,7 +110,7 @@ def compute_normalization_stats(
         'track_sigma': track_scaler.scale_,
     }
 
-    logger.info(f"Normalization stats computed on {len(train_indices)} jets.")
+    logger.info(f"Normalization stats computed on {len(train_indices):,} jets.")
 
     return norm_stats
 

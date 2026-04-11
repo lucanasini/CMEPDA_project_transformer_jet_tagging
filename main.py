@@ -8,13 +8,12 @@ import logging
 from pathlib import Path
 import time
 
-import src.trasformer_jet_tagging.utils as utils
-from src.trasformer_jet_tagging.dataset import GN2Dataset
-import src.trasformer_jet_tagging.plotting as plotting
-
 import numpy as np
 import torch
-from torch.utils.data import DataLoader
+
+import src.trasformer_jet_tagging.utils as utils
+from src.trasformer_jet_tagging.dataset import GN2Dataset, build_dataloader
+# import src.trasformer_jet_tagging.plotting as plotting
 
 logging.basicConfig(
     level  = logging.DEBUG,
@@ -84,7 +83,12 @@ if __name__ == "__main__":
         train_indices = rng.choice(train_indices, size=int(len(train_indices) * debug_frac), replace=False)
         val_indices   = rng.choice(val_indices,   size=int(len(val_indices)   * debug_frac), replace=False)
         test_indices  = rng.choice(test_indices,  size=int(len(test_indices)  * debug_frac), replace=False)
-        logger.info(f"Debug mode: {debug_frac*100:.0f}% dei dati")
+
+        logger.info(f"Debug mode: {debug_frac:.1%} dei dati")
+    
+    train_indices = np.sort(train_indices)
+    val_indices   = np.sort(val_indices)
+    test_indices  = np.sort(test_indices)
 
     with open(norm_path, "r") as f:
         norm_stats = {k: np.array(v) for k, v in json.load(f).items()}
@@ -103,8 +107,8 @@ if __name__ == "__main__":
     )
     loader_kwargs = dict(
         batch_size  = training_batch_size,
-        num_workers = config["training"].get("num_workers", 4),
-        pin_memory  = torch.cuda.is_available(),
+        num_workers = config["training"].get("num_workers", 0),
+        pin_memory  = torch.cuda.is_available(),                                       # TODO torch.cuda.is_available(),
     )
 
     train_dataset = GN2Dataset(indices=train_indices, **common_kwargs)
@@ -113,9 +117,9 @@ if __name__ == "__main__":
 
     start = time.time()
 
-    train_loader = DataLoader(train_dataset, shuffle=shuffle_var, **loader_kwargs)
-    val_loader   = DataLoader(val_dataset,   shuffle=False,       **loader_kwargs)
-    test_loader  = DataLoader(test_dataset,  shuffle=False,       **loader_kwargs)
+    train_loader = build_dataloader(train_dataset, **loader_kwargs, shuffle=True)
+    val_loader   = build_dataloader(val_dataset,   **loader_kwargs, shuffle=False)
+    test_loader  = build_dataloader(test_dataset,  **loader_kwargs, shuffle=False)
 
     batch = next(iter(train_loader))
     logger.debug(f"Jets shape:   {batch['jet_features'].shape}")
