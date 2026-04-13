@@ -5,7 +5,7 @@ Training logic for GN2.
 
 Provides:
   - GN2Loss         : combined multi-task loss
-  - build_scheduler : cosine annealing + linear warmup
+  - lr_scheduler : cosine annealing + linear warmup
   - run_epoch       : single epoch train/val loop
   - train           : full training loop, callable from main.py
 
@@ -13,8 +13,6 @@ Standalone usage (debug):
   python -m src.trasformer_jet_tagging.train --config configs/config.json
 """
 
-import argparse
-import json
 import logging
 from pathlib import Path
 
@@ -22,12 +20,10 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.optim import AdamW
-from torch.optim.lr_scheduler import LambdaLR
+from torch.optim.lr_scheduler import LinearLR, CosineAnnealingLR, SequentialLR, LambdaLR
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
-import src.trasformer_jet_tagging.utils as utils
-from src.trasformer_jet_tagging.dataset import GN2Dataset, GN2DataLoader
 from src.trasformer_jet_tagging.model import GN2
 
 logger = logging.getLogger("GN2.train")
@@ -38,100 +34,97 @@ logger = logging.getLogger("GN2.train")
 # ---------------------------------------------------------------------------
 class GN2Loss(nn.Module):
     """
-    Combined loss for the three GN2 tasks.
+    Jet classification loss only.
 
-    L = w_jet    * CE(jet_logits, jet_labels)
-      + w_origin * CE(origin_logits, origin_labels)   [valid tracks only]
-      + w_vertex * CE(vertex_logits, vertex_labels)   [valid pairs only]
-
-    Track-origin uses class-weighted CE to handle imbalance (paper §Methods).
+    L = CE_jet
     """
 
-    def __init__(
-        self,
-        w_jet   : float = 1.0,
-        w_origin: float = 0.5,
-        w_vertex: float = 0.5,
-        origin_class_weights: torch.Tensor = None,
-    ):
-        super().__init__()
-        self.w_jet    = w_jet
-        self.w_origin = w_origin
-        self.w_vertex = w_vertex
-
-        self.ce_jet    = nn.CrossEntropyLoss()
-        self.ce_origin = nn.CrossEntropyLoss(
-            weight=origin_class_weights,
-            ignore_index=-1
-        )
-        self.ce_vertex = nn.CrossEntropyLoss(ignore_index=-1)
-
-    def forward(
-        self,
-        outputs: dict,
-        labels : dict,
-        mask   : torch.Tensor,
-    ) -> dict:
+    def __init__(self):
         """
+        Initialize thr GN2 loss.
+        """
+        super().__init__()
+        self.ce_jet = nn.CrossEntropyLoss()
+
+    def forward(self, outputs: dict, labels: dict) -> dict:
+        """
+        Forward pass through the GN2 loss.
+
         Args:
-            outputs: dict from GN2.forward()
-            labels : dict with keys:
-                'jet_label'    : (B,)      long
-                'origin_label' : (B, T)    long  (-1 = ignore)
-                'vertex_label' : (B, T, T) long  (-1 = ignore)
-            mask   : (B, T) bool, True = real track
+            outputs:
+                'jet_outputs': (B, n_classes)
+            labels:
+                'jet_label': (B,) long
 
         Returns:
-            dict with 'total', 'jet', 'origin', 'vertex' losses.
+            dict with total and jet loss.
         """
-        loss_jet = self.ce_jet(outputs["jet_logits"], labels["jet_label"])
+        loss_jet = self.ce_jet(outputs["jet_outputs"], labels["jet_label"])
 
-        B, T, C = outputs["origin_logits"].shape
-        loss_origin = self.ce_origin(
-            outputs["origin_logits"].reshape(B * T, C),
-            labels["origin_label"].reshape(B * T),
-        )
-
-        B, T, _, C2 = outputs["vertex_logits"].shape
-        pair_mask  = mask.unsqueeze(2) & mask.unsqueeze(1)
-        vtx_logits = outputs["vertex_logits"].reshape(B * T * T, C2)
-        vtx_labels = labels["vertex_label"].reshape(B * T * T)
-        vtx_labels = vtx_labels.masked_fill(~pair_mask.reshape(B * T * T), -1)
-        loss_vertex = self.ce_vertex(vtx_logits, vtx_labels)
-
-        total = (self.w_jet    * loss_jet
-               + self.w_origin * loss_origin
-               + self.w_vertex * loss_vertex)
-
-        return {"total": total, "jet": loss_jet, "origin": loss_origin, "vertex": loss_vertex}
+        return {
+            "jet": loss_jet,
+        }
 
 
 # ---------------------------------------------------------------------------
 # LR scheduler
 # ---------------------------------------------------------------------------
-
-def build_scheduler(optimiser, n_total_steps: int, warmup_frac: float = 0.01) -> LambdaLR:
+def lr_scheduler(
+    optimizer,
+    n_total_steps: int,
+    warmup_frac: float = 0.01,
+    lr_initial: float = 1.0e-07,
+    lr_peak: float = 5.0e-04,
+    lr_final: float = 1.0e-05,
+) -> LambdaLR:
     """
-    Cosine annealing with linear warmup.
+    Build a learning rate scheduler with linear warmup followed by cosine annealing.
+
+    The schedule consists of two phases:
+        1. Linear warmup: the learning rate increases from `lr_initial` to `lr_peak`
+        over the first `warmup_frac * n_total_steps` steps.
+        2. Cosine decay: the learning rate decreases from `lr_peak` to `lr_final`
+        following a cosine schedule for the remaining steps.
 
     Args:
-        optimiser     : AdamW instance.
-        n_total_steps : total number of optimiser steps (epochs x batches).
-        warmup_frac   : fraction of steps used for linear warmup (default 0.01).
+        optimizer: optimizer instance (e.g. AdamW).
+        n_total_steps (int): total number of optimizer steps (epochs × batches).
+        warmup_frac (float): fraction of steps used for warmup (default: 0.01).
+        lr_initial (float): initial learning rate at step 0.
+        lr_peak (float): peak learning rate reached after warmup.
+        lr_final (float): minimum learning rate at the end of cosine decay.
 
     Returns:
-        LambdaLR scheduler.
+        torch.optim.lr_scheduler.SequentialLR: Scheduler implementing
+        warmup + cosine annealing.
     """
     n_warmup = max(1, int(warmup_frac * n_total_steps))
 
-    def lr_lambda(step: int) -> float:
-        if step < n_warmup:
-            return step / n_warmup
-        progress = (step - n_warmup) / max(1, n_total_steps - n_warmup)
-        cosine   = 0.5 * (1 + np.cos(np.pi * progress))
-        return max(cosine, 1e-5 / 5e-4)
+    base_lr = optimizer.param_groups[0]["lr"]
 
-    return LambdaLR(optimiser, lr_lambda)
+    start_factor = lr_initial / base_lr
+    end_factor   = lr_peak / base_lr
+
+    warmup = LinearLR(
+        optimizer,
+        start_factor = start_factor,
+        end_factor   = end_factor,
+        total_iters  = n_warmup
+    )
+
+    cosine = CosineAnnealingLR(
+        optimizer,
+        T_max   = n_total_steps - n_warmup,
+        eta_min = lr_final
+    )
+
+    scheduler = SequentialLR(
+        optimizer,
+        schedulers = [warmup, cosine],
+        milestones = [n_warmup]
+    )
+
+    return scheduler
 
 
 # ---------------------------------------------------------------------------
@@ -161,11 +154,11 @@ def run_epoch(
         scaler    : GradScaler for AMP (None = disabled).
 
     Returns:
-        dict with averaged losses: 'total', 'jet', 'origin', 'vertex'.
+        dict with averaged loss 'jet'.
     """
     model.train() if is_train else model.eval()
 
-    totals    = {"total": 0.0, "jet": 0.0, "origin": 0.0, "vertex": 0.0}
+    totals    = {"jet": 0.0}
     n_batches = 0
     ctx       = torch.enable_grad if is_train else torch.no_grad
 
@@ -188,11 +181,11 @@ def run_epoch(
             }
 
             if is_train and scaler is not None:
-                with torch.cuda.amp.autocast():
+                with torch.amp.autocast():
                     outputs = model(jet_f, trk_f, mask)
                     losses  = criterion(outputs, labels, mask)
                 optimiser.zero_grad()
-                scaler.scale(losses["total"]).backward()
+                scaler.scale(losses["jet"]).backward()
                 scaler.unscale_(optimiser)
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
                 scaler.step(optimiser)
@@ -200,15 +193,15 @@ def run_epoch(
                 scheduler.step()
             elif is_train:
                 outputs = model(jet_f, trk_f, mask)
-                losses  = criterion(outputs, labels, mask)
+                losses  = criterion(outputs, labels)
                 optimiser.zero_grad()
-                losses["total"].backward()
+                losses["jet"].backward()
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
                 optimiser.step()
                 scheduler.step()
             else:
                 outputs = model(jet_f, trk_f, mask)
-                losses  = criterion(outputs, labels, mask)
+                losses  = criterion(outputs, labels)
 
             for k in totals:
                 totals[k] += losses[k].item()
@@ -247,27 +240,23 @@ def train(
     """
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    training_cfg = config.get("training", {})
+    training_config = config.get("training", {})
 
-    criterion = GN2Loss(
-        w_jet    = training_cfg.get("w_jet",    1.0),
-        w_origin = training_cfg.get("w_origin", 0.5),
-        w_vertex = training_cfg.get("w_vertex", 0.5),
-    )
+    criterion = GN2Loss()
 
-    lr        = training_cfg.get("lr", 5e-4)
-    wd        = training_cfg.get("weight_decay", 1e-5)
+    lr        = training_config.get("lr_peak", 5.0e-04)
+    wd        = training_config.get("weight_decay", 1.0e-05)
     optimiser = AdamW(model.parameters(), lr=lr, weight_decay=wd)
 
-    n_epochs      = training_cfg.get("epochs", 20)
+    n_epochs      = training_config.get("max_epochs", 20)
     n_total_steps = n_epochs * len(train_loader)
-    scheduler     = build_scheduler(
+    lr_decay  = lr_scheduler(
         optimiser,
         n_total_steps,
-        warmup_frac=training_cfg.get("warmup_frac", 0.01),
+        warmup_frac = training_config.get("warmup_frac", 0.01),
     )
 
-    scaler = torch.cuda.amp.GradScaler() if device.type == "cuda" else None
+    scaler = torch.amp.GradScaler() if device.type == "cuda" else None
     writer = SummaryWriter(log_dir=str(output_dir / "runs"))
 
     best_val_loss = float("inf")
@@ -275,18 +264,15 @@ def train(
 
     for epoch in range(1, n_epochs + 1):
         train_losses = run_epoch(model, train_loader, criterion, optimiser,
-                                 scheduler, device, is_train=True,  scaler=scaler)
+                                 lr_decay, device, is_train=True,  scaler=scaler)
         val_losses   = run_epoch(model, val_loader,   criterion, optimiser,
-                                 scheduler, device, is_train=False)
+                                 lr_decay, device, is_train=False)
 
-        lr_now = scheduler.get_last_lr()[0]
+        lr_now = lr_decay.get_last_lr()[0]
         logger.info(
             f"Epoch {epoch:3d}/{n_epochs} | "
-            f"train={train_losses['total']:.4f} "
-            f"(jet={train_losses['jet']:.4f} "
-            f"orig={train_losses['origin']:.4f} "
-            f"vtx={train_losses['vertex']:.4f}) | "
-            f"val={val_losses['total']:.4f} | "
+            f"(jet={train_losses['jet']:.4f} | "
+            f"val={val_losses['jet']:.4f} | "
             f"lr={lr_now:.2e}"
         )
 
@@ -296,8 +282,8 @@ def train(
             writer.add_scalar(f"val/{k}", v, epoch)
         writer.add_scalar("lr", lr_now, epoch)
 
-        if val_losses["total"] < best_val_loss:
-            best_val_loss = val_losses["total"]
+        if val_losses["jet"] < best_val_loss:
+            best_val_loss = val_losses["jet"]
             torch.save({
                 "epoch"      : epoch,
                 "model_state": model.state_dict(),
@@ -315,23 +301,30 @@ def train(
     return model
 
 
-# ---------------------------------------------------------------------------
-# Standalone debug entry point
-# ---------------------------------------------------------------------------
+if __name__ == "__main__":
 
-def _build_components_from_config(config_path: str, debug_frac: float = 0.05):
-    """
-    Build all components needed for training directly from a config file.
-    Used only by the __main__ block for standalone debug runs.
+    import argparse
+    import json
 
-    Args:
-        config_path : path to JSON config file.
-        debug_frac  : fraction of data to use (default 0.05 = 5%).
+    import src.trasformer_jet_tagging.utils as utils
+    from src.trasformer_jet_tagging.dataset import GN2Dataset, GN2DataLoader
 
-    Returns:
-        tuple: (model, train_loader, val_loader, config, output_dir, device)
-    """
-    config = utils.load_config_json(config_path)
+    logging.basicConfig(
+        level  = logging.INFO,
+        format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+
+    parser = argparse.ArgumentParser(description="GN2 training (standalone debug)")
+    parser.add_argument("--config",      type=str,   default="configs/config.json")
+    parser.add_argument("--debug-frac",  type=float, default=0.05,
+                        help="Fraction of data to use for debug (default: 5%%)")
+    parser.add_argument("--epochs",      type=int,   default=None)
+    parser.add_argument("--lr",          type=float, default=None)
+    parser.add_argument("--batch-size",  type=int,   default=None)
+    args = parser.parse_args()
+
+
+    config = utils.load_config_json(args.config)
 
     preprocess_dir = Path(config["output"]["preprocess_dir"])
     output_dir     = Path(config["output"].get("checkpoints_dir", "outputs/checkpoints"))
@@ -344,16 +337,16 @@ def _build_components_from_config(config_path: str, debug_frac: float = 0.05):
     if not all(p.exists() for p in artifacts):
         logger.info("Preprocessing artifacts not found — running preprocess.py …")
         from src.trasformer_jet_tagging import preprocess
-        preprocess.main(config_path)
+        preprocess.main(args.config)
 
     train_indices = np.load(idx_dir / "train_indices.npy")
     val_indices   = np.load(idx_dir / "val_indices.npy")
 
-    if debug_frac < 1.0:
+    if args.debug_frac < 1.0:
         rng           = np.random.default_rng(seed=42)
-        train_indices = rng.choice(train_indices, size=int(len(train_indices) * debug_frac), replace=False)
-        val_indices   = rng.choice(val_indices,   size=int(len(val_indices)   * debug_frac), replace=False)
-        logger.info(f"Debug mode: {debug_frac:.0%} of data — "
+        train_indices = rng.choice(train_indices, size=int(len(train_indices) * args.debug_frac), replace=False)
+        val_indices   = rng.choice(val_indices,   size=int(len(val_indices)   * args.debug_frac), replace=False)
+        logger.info(f"Debug mode: {args.debug_frac:.0%} of data — "
                     f"train={len(train_indices):,}  val={len(val_indices):,}")
 
     train_indices = np.sort(train_indices)
@@ -393,40 +386,23 @@ def _build_components_from_config(config_path: str, debug_frac: float = 0.05):
     val_loader   = GN2DataLoader(GN2Dataset(indices=val_indices,   **common_kwargs),
                                     **loader_kwargs, shuffle=False)
 
-    device    = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model_cfg = config.get("model", {})
+    device    = torch.device("cpu")               # TODO torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model_config = config.get("model", {})
     model = GN2(
-        n_jet_vars   = len(jet_vars),
-        n_track_vars = len(track_vars),
-        n_classes    = model_cfg.get("n_classes", 4),
-        embed_dim    = model_cfg.get("embed_dim", 256),
-        n_heads      = model_cfg.get("n_heads", 8),
-        n_layers     = model_cfg.get("n_layers", 4),
-        ff_dim       = model_cfg.get("ff_dim", 512),
-        pool_dim     = model_cfg.get("pool_dim", 128),
-        dropout      = model_cfg.get("dropout", 0.0),
+        n_jet_vars       = len(jet_vars),
+        n_track_vars     = len(track_vars),
+        n_classes        = len(label_map),
+        init_hidden_dim  = model_config.get("initialiser_hidden_dim", None),
+        init_output_dim  = model_config.get("initialiser_output_dim", None),
+        embed_dim        = model_config.get("transformer_embed_dim", None),
+        n_heads          = model_config.get("transformer_n_heads", None),
+        n_layers         = model_config.get("transformer_n_layers", None),
+        ff_dim           = model_config.get("transformer_ff_dim", None),
+        pool_dim         = model_config.get("pooling_dim", None),
+        dropout          = model_config.get("transformer_dropout", None),
+        head_hidden_dims = model_config.get("head_hidden_dims", None),
+        activation       = model_config.get("activation", None),
     ).to(device)
-
-    return model, train_loader, val_loader, config, output_dir, device
-
-
-if __name__ == "__main__":
-    logging.basicConfig(
-        level  = logging.INFO,
-        format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    )
-
-    parser = argparse.ArgumentParser(description="GN2 training (standalone debug)")
-    parser.add_argument("--config",      type=str,   default="configs/config.json")
-    parser.add_argument("--debug-frac",  type=float, default=0.05,
-                        help="Fraction of data to use for debug (default: 5%%)")
-    parser.add_argument("--epochs",      type=int,   default=None)
-    parser.add_argument("--lr",          type=float, default=None)
-    parser.add_argument("--batch-size",  type=int,   default=None)
-    args = parser.parse_args()
-
-    model, train_loader, val_loader, config, output_dir, device = \
-        _build_components_from_config(args.config, debug_frac=args.debug_frac)
 
     # CLI overrides (only relevant for debug runs)
     if args.epochs     is not None: config["training"]["epochs"]     = args.epochs

@@ -13,7 +13,7 @@ import time
 import numpy as np
 import torch
 
-from src.trasformer_jet_tagging import utils, plotting
+from src.trasformer_jet_tagging import utils
 from src.trasformer_jet_tagging.dataset import GN2Dataset, GN2DataLoader
 from src.trasformer_jet_tagging.model import GN2
 from src.trasformer_jet_tagging.train import train
@@ -128,7 +128,10 @@ if __name__ == "__main__":
     logger.debug(f"Labels shape: {batch['label'].shape}")
 
     if config["output"].get("save_plots", False):
-        plotting.make_all_plots(
+
+        from src.trasformer_jet_tagging.plotting import make_all_plots
+        
+        make_all_plots(
             file_path       = file_path,
             jet_vars        = jet_vars,
             track_vars      = track_vars,
@@ -144,7 +147,7 @@ if __name__ == "__main__":
     GN2_model = GN2(
         n_jet_vars       = len(jet_vars),
         n_track_vars     = len(track_vars),
-        n_classes        = model_config.get(len(label_map), None),
+        n_classes        = len(label_map),
         init_hidden_dim  = model_config.get("initialiser_hidden_dim", None),
         init_output_dim  = model_config.get("initialiser_output_dim", None),
         embed_dim        = model_config.get("transformer_embed_dim", None),

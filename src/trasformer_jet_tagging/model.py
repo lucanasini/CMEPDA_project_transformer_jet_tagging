@@ -342,13 +342,13 @@ class GN2(nn.Module):
         jet_rep = self.pool(x, padding_mask=mask)   # (B, pool_dim)
 
         # 5. Primary head: jet classification
-        jet_logits = self.jet_head(jet_rep)         # (B, n_classes)
+        jet_outputs = self.jet_head(jet_rep)         # (B, n_classes)
 
         return {
-            "jet_logits" : jet_logits,
+            "jet_outputs" : jet_outputs,
         }
 
-    @torch.no_grad()
+    @torch.no_grad()        # for inference
     def predict_proba(
         self,
         jet_features  : torch.Tensor,

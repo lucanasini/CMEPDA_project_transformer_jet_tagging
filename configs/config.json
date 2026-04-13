@@ -38,18 +38,18 @@
     "split_seed": 42
   },
   "model": {
-    "initialiser_hidden_dim": 256,
-    "initialiser_output_dim": 256,
-    "transformer_n_layers": 4,
-    "transformer_n_heads": 8,
-    "transformer_embed_dim": 256,
-    "transformer_ff_dim": 512,
+    "initialiser_hidden_dim": 64,
+    "initialiser_output_dim": 64,
+    "transformer_n_layers": 2,
+    "transformer_n_heads": 4,
+    "transformer_embed_dim": 64,
+    "transformer_ff_dim": 128,
     "transformer_dropout": 0.0,
-    "pooling_dim": 128,
+    "pooling_dim": 64,
     "head_hidden_dims": [
-      128,
       64,
-      32
+      32,
+      16
     ],
     "activation": "relu"
   },
