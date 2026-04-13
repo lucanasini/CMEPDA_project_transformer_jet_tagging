@@ -429,11 +429,13 @@ class GN2(nn.Module):
         Returns:
             (torch.Tensor): shape (B,), the c-tagging discriminant D_c
         """
+        label_map = label_map if label_map is not None else FLAVOUR_LABELS
+        if not all(k in label_map for k in ["b-jet", "c-jet", "light-jet", "tau-jet"]):
+            raise ValueError(f"label_map must contain: {["b-jet", "c-jet", "light-jet", "tau-jet"]}")
         proba = self.predict_proba(jet_features, track_features, mask)
-        # class order: light=0, c=1, b=2, tau=3     TODO: make this more robust by using label_map instead of hardcoding class order
-        pb   = proba[:, 2]
-        pc   = proba[:, 1]
-        pu   = proba[:, 0]
-        ptau = proba[:, 3]
+        pb   = proba[:, label_map["b-jet"]]
+        pc   = proba[:, label_map["c-jet"]]
+        pu   = proba[:, label_map["light-jet"]]
+        ptau = proba[:, label_map["tau-jet"]]
         denom = fb * pb + ftau * ptau + (1 - fb - ftau) * pu
         return torch.log(pc / denom.clamp(min=1e-9))

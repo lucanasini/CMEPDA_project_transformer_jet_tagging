@@ -181,7 +181,7 @@ def run_epoch(
             }
 
             if is_train and scaler is not None:
-                with torch.amp.autocast():
+                with torch.amp.autocast(device_type=device.type):
                     outputs = model(jet_f, trk_f, mask)
                     losses  = criterion(outputs, labels, mask)
                 optimiser.zero_grad()
@@ -386,7 +386,7 @@ if __name__ == "__main__":
     val_loader   = GN2DataLoader(GN2Dataset(indices=val_indices,   **common_kwargs),
                                     **loader_kwargs, shuffle=False)
 
-    device    = torch.device("cpu")               # TODO torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device    = torch.device("cuda")               # TODO torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model_config = config.get("model", {})
     model = GN2(
         n_jet_vars       = len(jet_vars),
