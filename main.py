@@ -54,8 +54,8 @@ if __name__ == "__main__":
     label_vars = config["data"]["label"]
     label_map  = {int(k): v for k, v in config["data"]["label_map"].items()}
 
-    training_batch_size = config["training"].get("batch_size", 1024)
-    shuffle_var         = config["data"].get("shuffle", False)
+    batch_size  = config["training"].get("batch_size", 1024)
+    shuffle_var = config["data"].get("shuffle", False)
 
     # 1. preprocessing
     idx_dir   = preprocess_dir / "indices"
@@ -109,16 +109,17 @@ if __name__ == "__main__":
         norm_stats      = norm_stats,
     )
     loader_kwargs = dict(
-        batch_size  = training_batch_size,
+        batch_size  = batch_size,
         num_workers = config["training"].get("num_workers", 0),
-        pin_memory  = torch.cuda.is_available(),                                       # TODO torch.cuda.is_available(),
+        pin_memory  = torch.cuda.is_available(),
+        drop_last   = config["data"].get("drop_last", False),
     )
 
     train_dataset = GN2Dataset(indices=train_indices, **common_kwargs)
     val_dataset   = GN2Dataset(indices=val_indices,   **common_kwargs)
     test_dataset  = GN2Dataset(indices=test_indices,  **common_kwargs)
 
-    train_loader = GN2DataLoader(train_dataset, **loader_kwargs, shuffle=True)
+    train_loader = GN2DataLoader(train_dataset, **loader_kwargs, shuffle=shuffle_var)
     val_loader   = GN2DataLoader(val_dataset,   **loader_kwargs, shuffle=False)
     test_loader  = GN2DataLoader(test_dataset,  **loader_kwargs, shuffle=False)
 
@@ -143,6 +144,7 @@ if __name__ == "__main__":
         )
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     model_config = config.get("model", {})
     GN2_model = GN2(
         n_jet_vars       = len(jet_vars),
@@ -165,5 +167,6 @@ if __name__ == "__main__":
         train_loader = train_loader,
         val_loader   = val_loader,
         config       = config,
-        output_dir   = config["output"].get("checkpoints_dir", "outputs/checkpoints"),
-        device       = device)
+        output_dir   = Path(config["output"].get("checkpoints_dir", "outputs/checkpoints")),
+        device       = device
+    )

@@ -33,7 +33,7 @@
     "val_fraction":   0.2,
     "test_fraction":  0.1,
 
-    "batch_size": 1024,
+    "drop_last": false,
     "shuffle": true,
     "split_seed": 42
   },
@@ -54,7 +54,7 @@
     "activation": "relu"
   },
   "training": {
-    "max_epochs": 5,
+    "max_epochs": 2,
     "batch_size": 1024,
     "num_workers": 0,
     "early_stopping_patience": 15,
@@ -83,7 +83,7 @@
   },
   "output": {
     "preprocess_dir": "outputs/preprocess",
-    "save_plots": true,
+    "save_plots": false,
     "plots_dir": "outputs/plots",
     "save_best": true,
     "save_last": true,

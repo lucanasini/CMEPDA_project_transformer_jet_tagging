@@ -30,10 +30,6 @@ from sklearn.model_selection import train_test_split
 import src.trasformer_jet_tagging.utils as utils
 
 # logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
 logger = logging.getLogger("GN2.preprocess")
 
 
@@ -133,6 +129,12 @@ def main(config_path: str):
 
 if __name__ == "__main__":
     import argparse
+
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+
     parser = argparse.ArgumentParser(description="GN2 preprocessing pipeline")
     parser.add_argument(
         "--config",

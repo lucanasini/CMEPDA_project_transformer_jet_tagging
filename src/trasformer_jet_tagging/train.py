@@ -17,6 +17,7 @@ import logging
 from pathlib import Path
 
 import numpy as np
+from tqdm import tqdm
 import torch
 import torch.nn as nn
 from torch.optim import AdamW
@@ -138,6 +139,7 @@ def run_epoch(
     device: torch.device,
     is_train: bool,
     scaler: torch.amp.GradScaler = None,
+    pbar: tqdm = None,
 ) -> dict:
     """
     Run one full epoch.
@@ -151,6 +153,7 @@ def run_epoch(
         device    (torch.device): Device to move tensors to.
         is_train  (bool): True for training, False for validation.
         scaler    (torch.amp.GradScaler): optional GradScaler for mixed precision training (default: None).
+        pbar     (tqdm): optional tqdm progress bar to update during training (default: None).
 
     Returns:
         dict with averaged loss.
@@ -195,6 +198,10 @@ def run_epoch(
             for k in totals:
                 totals[k] += losses[k].item()
             n_batches += 1
+
+            if pbar is not None and is_train:
+                pbar.update(1)
+                pbar.set_postfix_str(f"loss: {totals['total']/n_batches:.4f}")
 
     return {k: v / max(n_batches, 1) for k, v in totals.items()}
 
@@ -252,20 +259,32 @@ def train(
     checkpoint_path = output_dir / "best_model.pt"
 
     for epoch in range(1, n_epochs + 1):
+
+        tqdm.write(f"\nEpoch {epoch}/{n_epochs}")
+
+        pbar = tqdm(
+            total      = len(train_loader),
+            bar_format = "{n_fmt}/{total_fmt} {bar} {elapsed}<{remaining},"
+                         " {rate_fmt}{postfix}",
+            ascii      = "━━",
+            ncols      = 80,
+            leave      = True,
+            mininterval= 0,
+            miniters   = 1,
+        )
         train_losses = run_epoch(model, train_loader, loss, optimiser,
-                                 lr_decay, device, is_train=True,  scaler=scaler)
+                                 lr_decay, device, is_train=True,  scaler=scaler, pbar=pbar)
         val_losses   = run_epoch(model, val_loader,   loss, optimiser,
                                  lr_decay, device, is_train=False)
 
         lr_now = lr_decay.get_last_lr()[0]
-        logger.info(
-            f"Epoch {epoch:3d}/{n_epochs} | "
-            f"train loss={train_losses['total']:.4f} | "
-            f"(jet={train_losses['jet']:.4f}) | "
-            f"val={val_losses['total']:.4f} | "
-            f"lr={lr_now:.2e}"
-        )
 
+        pbar.set_postfix_str(
+            f"loss: {train_losses['total']:.4f} - "
+            f"val_loss: {val_losses['total']:.4f} - "
+            f"lr: {lr_now:.2e}"
+        )
+        pbar.close()
         for k, v in train_losses.items():
             writer.add_scalar(f"train/{k}", v, epoch)
         for k, v in val_losses.items():
@@ -281,13 +300,13 @@ def train(
                 "val_loss"   : best_val_loss,
                 "config"     : config,
             }, checkpoint_path)
-            logger.info(f"    New best val_loss={best_val_loss:.4f} - saved to {checkpoint_path}")
+            tqdm.write(f"    New best val_loss={best_val_loss:.4f} - {checkpoint_path}")
 
     writer.close()
-    logger.info("Training complete.")
+    tqdm.write("\nTraining complete.")
 
     # reload best weights before returning
-    model.load_state_dict(torch.load(checkpoint_path, map_location=device)["model_state"])
+    model.load_state_dict(torch.load(checkpoint_path, map_location=device, weights_only=True)["model_state"])
     return model
 
 
@@ -308,16 +327,17 @@ if __name__ == "__main__":
     parser.add_argument("--config",     type=str,   default="configs/config.json")
     parser.add_argument("--debug-frac", type=float, default=0.05,
                         help="Fraction of data to use for debug (default: 5%%)")
-    parser.add_argument("--epochs",     type=int,   default=None)
-    parser.add_argument("--lr",         type=float, default=None)
-    parser.add_argument("--batch-size", type=int,   default=None)
     args = parser.parse_args()
-
 
     config = utils.load_config_json(args.config)
 
     preprocess_dir = Path(config["output"]["preprocess_dir"])
     output_dir     = Path(config["output"].get("checkpoints_dir", "outputs/checkpoints"))
+
+    jet_vars   = config["data"]["jet_features"]
+    track_vars = config["data"]["track_features"]
+    label_vars = config["data"]["label"]
+    label_map  = {int(k): v for k, v in config["data"]["label_map"].items()}
 
     # run preprocessing if artifacts are missing
     idx_dir   = preprocess_dir / "indices"
@@ -325,7 +345,7 @@ if __name__ == "__main__":
     artifacts = [idx_dir / "train_indices.npy", idx_dir / "val_indices.npy", norm_path]
 
     if not all(p.exists() for p in artifacts):
-        logger.info("Preprocessing artifacts not found — running preprocess.py …")
+        logger.info("Preprocessing artifacts not found - running preprocess.py …")
         from src.trasformer_jet_tagging import preprocess
         preprocess.main(args.config)
 
@@ -345,38 +365,34 @@ if __name__ == "__main__":
     with open(norm_path) as f:
         norm_stats = {k: np.array(v) for k, v in json.load(f).items()}
 
-    file_path  = config["data"]["h5_path"]
-    jet_vars   = config["data"]["jet_features"]
-    track_vars = config["data"]["track_features"]
-    label_var  = config["data"]["label"]
-    label_map  = {int(k): v for k, v in config["data"]["label_map"].items()}
-    max_tracks = config["data"].get("max_tracks", 40)
-
+    common_kwargs = dict(
+        file_path       = config["data"]["h5_path"],
+        n_tracks        = config["data"].get("max_tracks", 40),
+        jet_vars        = jet_vars,
+        track_vars      = track_vars,
+        jet_flavour     = label_vars,
+        jet_flavour_map = label_map,
+        norm_stats      = norm_stats,
+    )
+    
     training_config = config.get("training", {})
     batch_size      = training_config.get("batch_size", 1024)
     num_workers     = training_config.get("num_workers", 0)
 
-    common_kwargs = dict(
-        file_path       = file_path,
-        n_tracks        = max_tracks,
-        jet_vars        = jet_vars,
-        track_vars      = track_vars,
-        jet_flavour     = label_var,
-        jet_flavour_map = label_map,
-        norm_stats      = norm_stats,
-    )
     loader_kwargs = dict(
         batch_size  = batch_size,
         num_workers = num_workers,
         pin_memory  = torch.cuda.is_available(),
     )
 
-    train_loader = GN2DataLoader(GN2Dataset(indices=train_indices, **common_kwargs),
-                                    **loader_kwargs, shuffle=True)
-    val_loader   = GN2DataLoader(GN2Dataset(indices=val_indices,   **common_kwargs),
-                                    **loader_kwargs, shuffle=False)
+    train_dataset = GN2Dataset(indices=train_indices, **common_kwargs)
+    val_dataset   = GN2Dataset(indices=val_indices,   **common_kwargs)
+
+    train_loader = GN2DataLoader(train_dataset, **loader_kwargs, shuffle=config["data"].get("shuffle", False))
+    val_loader   = GN2DataLoader(val_dataset, **loader_kwargs, shuffle=False)
 
     device    = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
     model_config = config.get("model", {})
     model = GN2(
         n_jet_vars       = len(jet_vars),
@@ -394,8 +410,11 @@ if __name__ == "__main__":
         activation       = model_config.get("activation", None),
     ).to(device)
 
-    if args.epochs     is not None: config["training"]["epochs"]     = args.epochs
-    if args.lr         is not None: config["training"]["lr"]         = args.lr
-    if args.batch_size is not None: config["training"]["batch_size"] = args.batch_size
-
-    train(model, train_loader, val_loader, config, output_dir, device)
+    train(
+        model,
+        train_loader,
+        val_loader,
+        config,
+        output_dir,
+        device
+    )
