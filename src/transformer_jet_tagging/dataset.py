@@ -55,7 +55,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader, BatchSampler, SequentialSampler, RandomSampler
 
-from src.trasformer_jet_tagging.constants import (
+from src.transformer_jet_tagging.constants import (
     JET_VARS_DEFAULT,
     TRACK_VARS_DEFAULT,
     JET_FLAVOUR_LABEL,
@@ -510,7 +510,7 @@ if __name__ == "__main__":
     import argparse
     import sys
     import time
-    from src.trasformer_jet_tagging.utils import compute_normalization_stats, load_config_json
+    from src.transformer_jet_tagging.utils import compute_normalization_stats, load_config_json
     from sklearn.model_selection import train_test_split
 
     parser = argparse.ArgumentParser(

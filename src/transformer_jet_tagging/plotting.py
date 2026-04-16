@@ -25,7 +25,7 @@ matplotlib.use("Agg")               # non-interactive backend (no display needed
 import matplotlib.pyplot as plt
 import mplhep as hep
 
-from src.trasformer_jet_tagging.constants import FLAVOUR_LABELS, FLAVOUR_COLORS
+from src.transformer_jet_tagging.constants import FLAVOUR_LABELS, FLAVOUR_COLORS
 
 hep.style.use(hep.style.ATLAS)
 logger = logging.getLogger("GN2.plotting")
@@ -386,7 +386,7 @@ def make_all_plots(
 if __name__ == "__main__":
     import argparse
     import sys
-    import src.trasformer_jet_tagging.utils as utils
+    import src.transformer_jet_tagging.utils as utils
 
     logging.basicConfig(
         level=logging.INFO,

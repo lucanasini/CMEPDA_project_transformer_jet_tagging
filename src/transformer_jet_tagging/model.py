@@ -33,7 +33,7 @@ from typing import Optional, Dict
 import torch
 import torch.nn as nn
 
-from src.trasformer_jet_tagging.constants import FLAVOUR_LABELS
+from src.transformer_jet_tagging.constants import FLAVOUR_LABELS
 
 logger = logging.getLogger("GN2.model")
 

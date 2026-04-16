@@ -27,7 +27,7 @@ import h5py
 import numpy as np
 from sklearn.model_selection import train_test_split
 
-import src.trasformer_jet_tagging.utils as utils
+import src.transformer_jet_tagging.utils as utils
 
 # logging
 logger = logging.getLogger("GN2.preprocess")

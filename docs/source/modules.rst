@@ -4,4 +4,4 @@ src
 .. toctree::
    :maxdepth: 4
 
-   trasformer_jet_tagging
+   transformer_jet_tagging

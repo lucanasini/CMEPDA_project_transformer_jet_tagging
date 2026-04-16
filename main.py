@@ -12,10 +12,10 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from src.trasformer_jet_tagging import utils
-from src.trasformer_jet_tagging.dataset import GN2Dataset, GN2DataLoader
-from src.trasformer_jet_tagging.model import GN2
-from src.trasformer_jet_tagging.train import train
+from src.transformer_jet_tagging import utils
+from src.transformer_jet_tagging.dataset import GN2Dataset, GN2DataLoader
+from src.transformer_jet_tagging.model import GN2
+from src.transformer_jet_tagging.train import train
 
 logging.basicConfig(
     level  = logging.INFO,
@@ -69,7 +69,7 @@ if __name__ == "__main__":
 
     if not all(p.exists() for p in artifacts_dir):
         logger.info("Preprocessing files not found. Running preprocess script ...")
-        from src.trasformer_jet_tagging import preprocess
+        from src.transformer_jet_tagging import preprocess
         preprocess.main(config_path=config_path)
 
     for path in artifacts_dir:
@@ -129,7 +129,7 @@ if __name__ == "__main__":
 
     if config["output"].get("save_plots", False):
 
-        from src.trasformer_jet_tagging.plotting import make_all_plots
+        from src.transformer_jet_tagging.plotting import make_all_plots
         
         make_all_plots(
             file_path       = file_path,

@@ -25,8 +25,8 @@ from torch.optim.lr_scheduler import LinearLR, CosineAnnealingLR, SequentialLR, 
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
-from src.trasformer_jet_tagging.model import GN2
-from src.trasformer_jet_tagging.dataset import GN2DataLoader
+from src.transformer_jet_tagging.model import GN2
+from src.transformer_jet_tagging.dataset import GN2DataLoader
 
 logger = logging.getLogger("GN2.train")
 
@@ -315,8 +315,8 @@ if __name__ == "__main__":
     import argparse
     import json
 
-    import src.trasformer_jet_tagging.utils as utils
-    from src.trasformer_jet_tagging.dataset import GN2Dataset
+    import src.transformer_jet_tagging.utils as utils
+    from src.transformer_jet_tagging.dataset import GN2Dataset
 
     logging.basicConfig(
         level  = logging.DEBUG,
@@ -346,7 +346,7 @@ if __name__ == "__main__":
 
     if not all(p.exists() for p in artifacts):
         logger.info("Preprocessing artifacts not found - running preprocess.py …")
-        from src.trasformer_jet_tagging import preprocess
+        from src.transformer_jet_tagging import preprocess
         preprocess.main(args.config)
 
     train_indices = np.load(idx_dir / "train_indices.npy")
