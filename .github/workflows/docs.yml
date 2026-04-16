@@ -35,3 +35,9 @@ jobs:
           git add ./docs
           git diff --staged --quiet || git commit -m "docs: aggiornamento automatico [skip ci]"
           git push
+
+      - name: Pubblica su GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./docs
