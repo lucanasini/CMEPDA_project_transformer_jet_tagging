@@ -329,7 +329,7 @@ class GN2(nn.Module):
 
         Returns:
             dict with keys:
-              'jet_logits' : (torch.Tensor): shape (B, n_classes)
+              'jet_outputs' : (torch.Tensor): shape (B, n_classes)
         """
         _, T, _ = track_features.shape
 
@@ -375,7 +375,7 @@ class GN2(nn.Module):
         """
         self.eval()
         out = self.forward(jet_features, track_features, mask)
-        return torch.softmax(out["jet_logits"], dim=-1)
+        return torch.softmax(out["jet_outputs"], dim=-1)
     
     @torch.no_grad()
     def discriminant_db(

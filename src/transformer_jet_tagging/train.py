@@ -54,7 +54,7 @@ class GN2Loss(nn.Module):
 
         Args:
             outputs (dict): model outputs with keys:
-                "jet_outputs" (torch.Tensor, shape (batch_size, n_classes)): raw logits for jet classification.
+                "jet_outputs" (torch.Tensor, shape (batch_size, n_classes)): raw outputs for jet classification.
             labels (dict): ground truth labels with keys:
                 "jet_label" (torch.Tensor, shape (batch_size,)): integer class labels for each jet.
         """

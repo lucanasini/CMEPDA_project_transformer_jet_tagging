@@ -432,10 +432,11 @@ class _BatchCollator:
 
         for i, var in enumerate(dataset.track_vars):
             raw_block = tracks_raw[var].astype(np.float32)[:, :n_tracks]        # shape (n_jets, n_tracks)
-
             if raw_block.shape[1] < n_tracks:
-                pad_cols  = n_tracks - raw_block.shape[1]
-                raw_block = np.pad(raw_block, ((0, 0), (0, pad_cols)))
+                pad_width = n_tracks - raw_block.shape[1]
+                raw_block = np.pad(raw_block, ((0, 0), (0, pad_width)))
+                
+            track_batch[:, :, i] = raw_block
 
             if has_norm:
                 raw_block = (raw_block - track_mu[i]) / track_sigma[i]
