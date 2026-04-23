@@ -79,21 +79,24 @@ def compute_normalization_stats(
             for jvar in jet_vars:
                 jet_var = jets_raw[jvar].reshape(-1, 1)             # reshape to (n_jets_in_batch, 1) for StandardScaler`
                 if jvar == 'pt':
-                    jet_var = np.log(jet_var)
+                    eps = 1e-8
+                    jet_var = np.log(np.clip(jet_var.astype(np.float32), eps, None))
                 jet_batch[:, jet_vars.index(jvar)] = jet_var[:, 0]  # fill the pre-allocated array
             jet_scaler.partial_fit(jet_batch)
 
             # track features
             tracks_raw = f['tracks'][batch_idx]
+            track_batch = np.stack([tracks_raw[tvar] for tvar in track_vars], axis=-1).astype(np.float32)
+            track_batch = track_batch.reshape(-1, track_batch.shape[-1])
             if "valid" in tracks_raw.dtype.names:
-                valid_mask = tracks_raw['valid'].astype(bool)
+                valid_mask = np.asarray(tracks_raw['valid'], dtype=bool).reshape(-1)
             else:
                 logger.warning("'valid' field not found in tracks dataset. Assuming all tracks are valid for normalization stats.")
-                valid_mask = np.ones(len(tracks_raw), dtype=bool)
-            track_batch  = np.stack([tracks_raw[tvar] for tvar in track_vars], axis=-1)
+                valid_mask = np.ones(track_batch.shape[0], dtype=bool)
             valid_tracks = track_batch[valid_mask]
-            if len(valid_tracks) > 0:
-                track_scaler.partial_fit(valid_tracks)
+            if valid_tracks.shape[0] == 0:
+                valid_tracks = np.zeros((1, len(track_vars)), dtype=np.float32)
+            track_scaler.partial_fit(valid_tracks)
 
             logger.debug(f"partial_fit: batch {start}–{start + len(batch_idx)} done.")
 

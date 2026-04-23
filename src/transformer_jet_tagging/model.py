@@ -293,6 +293,8 @@ class GN2(nn.Module):
             nn.Linear(init_hidden_dim, init_output_dim),
         )
 
+        self.proj = nn.Linear(init_output_dim, embed_dim)
+
         # 2. Transformer encoder ("n_layers" layers, "n_heads" heads, pre-norm)
         self.transformer = nn.ModuleList([
             TransformerLayer(embed_dim, n_heads, ff_dim, dropout, activation) for _ in range(n_layers)
@@ -338,7 +340,8 @@ class GN2(nn.Module):
         combined     = torch.cat([jet_expanded, track_features], dim=-1)    # (B, T, J+K), concatenate along feature dimension
 
         # 2. Per-track initialisation
-        x = self.track_init(combined)   # (B, T, embed_dim)
+        x = self.track_init(combined)
+        x = self.proj(x)                # (B, T, embed_dim)
 
         # 3. Transformer encoder
         for layer in self.transformer:

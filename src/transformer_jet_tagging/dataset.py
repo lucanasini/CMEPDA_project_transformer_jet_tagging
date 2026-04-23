@@ -176,7 +176,8 @@ class GN2Dataset(Dataset):
         Returns:
             (np.ndarray): shape (n, 2), normalized [log_pt, eta].
         """
-        jet_pt_log = np.log(jet_pt.astype(np.float32))
+        eps = 1e-8
+        jet_pt_log = np.log(np.clip(jet_pt.astype(np.float32), eps, None))
         jet_eta    = jet_eta.astype(np.float32)
 
         if (
