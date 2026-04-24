@@ -88,7 +88,7 @@ def _load_track_data(
     Returns:
         dict:
             var_name (np.ndarray): shape (n_tracks,) for each track variable.
-            "label"  (np.ndarray): shape (n_tracks,) integer class index for each track's jet.
+            "label" (np.ndarray): shape (n_tracks,) integer class index for each track's jet.
     """
     sorted_idx = np.sort(indices[:max_jets])
     data_lists: Dict[str, list] = {v: [] for v in track_vars}
@@ -129,9 +129,9 @@ def plot_jet_variables(
     pt is shown both raw (linear) and log-transformed.
 
     Args:
-        jet_data    (dict):     Output of _load_jet_data().
-        jet_vars    (list):     Variable names to plot.
-        output_dir  (Path):     Directory where PNGs are saved.
+        jet_data (dict): Output of _load_jet_data().
+        jet_vars (list): Variable names to plot.
+        output_dir (Path): Directory where PNGs are saved.
     """
     labels  = jet_data["label"]
     classes = sorted(FLAVOUR_LABELS.keys())
@@ -205,10 +205,10 @@ def plot_track_variables(
     Variables are split across multiple pages if needed.
 
     Args:
-        track_data    (dict):   Output of _load_track_data().
-        track_vars    (list):   Variable names to plot.
-        output_dir    (Path):   Directory where PNGs are saved.
-        vars_per_page (int):    Max variables per figure (default 6).
+        track_data (dict): Output of _load_track_data().
+        track_vars (list): Variable names to plot.
+        output_dir (Path): Directory where PNGs are saved.
+        vars_per_page (int): Max variables per figure (default 6).
     """
     labels  = track_data["label"]
     classes = sorted(FLAVOUR_LABELS.keys())
@@ -272,11 +272,11 @@ def plot_correlations(
     Plot Pearson correlation matrices for jet and track variables.
 
     Args:
-        jet_data    (dict):   Output of _load_jet_data().
-        track_data  (dict):   Output of _load_track_data().
-        jet_vars    (list):   Jet variable names.
-        track_vars  (list):   Track variable names.
-        output_dir  (Path):   Directory where PNGs are saved.
+        jet_data (dict): Output of _load_jet_data().
+        track_data (dict): Output of _load_track_data().
+        jet_vars (list): Jet variable names.
+        track_vars (list): Track variable names.
+        output_dir (Path): Directory where PNGs are saved.
     """
 
     def _corr_matrix(data_dict, vars_list):

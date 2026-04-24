@@ -4,10 +4,10 @@ train.py
 Training logic for GN2.
 
 Provides:
-  - GN2Loss         : combined multi-task loss
+  - GN2Loss      : combined multi-task loss
   - lr_scheduler : cosine annealing + linear warmup
-  - run_epoch       : single epoch train/val loop
-  - train           : full training loop, callable from main.py
+  - run_epoch    : single epoch train/val loop
+  - train        : full training loop, callable from main.py
 
 Standalone usage (debug):
   python -m src.trasformer_jet_tagging.train --config configs/config.json
@@ -145,15 +145,15 @@ def run_epoch(
     Run one full epoch.
 
     Args:
-        model     (GN2): GN2 model instance.
-        loader    (DataLoader): train or val DataLoader.
+        model (GN2): GN2 model instance.
+        loader (DataLoader): train or val DataLoader.
         criterion (GN2Loss): GN2Loss instance.
         optimiser (AdamW): AdamW instance (unused during validation).
         scheduler (LambdaLR): LambdaLR instance (stepped only during training).
-        device    (torch.device): Device to move tensors to.
-        is_train  (bool): True for training, False for validation.
-        scaler    (torch.amp.GradScaler): optional GradScaler for mixed precision training (default: None).
-        pbar      (tqdm): optional tqdm progress bar to update during training (default: None).
+        device (torch.device): Device to move tensors to.
+        is_train (bool): True for training, False for validation.
+        scaler (torch.amp.GradScaler): optional GradScaler for mixed precision training (default: None).
+        pbar (tqdm): optional tqdm progress bar to update during training (default: None).
 
     Returns:
         dict with averaged loss.
@@ -221,12 +221,12 @@ def train(
     Full training loop.
 
     Args:
-        model        (GN2): GN2 instance (already on device).
+        model (GN2): GN2 instance (already on device).
         train_loader (DataLoader): DataLoader for training set.
-        val_loader   (DataLoader): DataLoader for validation set.
-        config       (dict): full config dict.
-        output_dir   (Path): directory where checkpoints and TB runs are saved.
-        device       (torch.device): torch device.
+        val_loader (DataLoader): DataLoader for validation set.
+        config (dict): full config dict.
+        output_dir (Path): directory where checkpoints and TB runs are saved.
+        device (torch.device): torch device.
 
     Returns:
         model (GN2): GN2 model loaded with the best checkpoint weights.

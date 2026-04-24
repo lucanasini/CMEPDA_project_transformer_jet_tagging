@@ -118,7 +118,7 @@ class TransformerLayer(nn.Module):
         Forward pass through the transformer layer.
 
         Args:
-            inputs           (torch.Tensor): shape (B, T, d_model)
+            inputs (torch.Tensor): shape (B, T, d_model)
             key_padding_mask (torch.Tensor, optional): shape (B, T), False = position to IGNORE
 
         Returns:
@@ -177,7 +177,7 @@ class AttentionPooling(nn.Module):
         Forward pass through the attention pooling layer.
 
         Args:
-            x            (torch.Tensor): shape (B, T, d_in), track embeddings from transformer
+            x (torch.Tensor): shape (B, T, d_in), track embeddings from transformer
             padding_mask (torch.Tensor, optional): shape (B, T), True = real track, False = padding
         
         Returns:
@@ -325,13 +325,13 @@ class GN2(nn.Module):
         Forward pass through the GN2 model.
 
         Args:
-            jet_features   (torch.Tensor): shape (B, n_jet_vars)
+            jet_features (torch.Tensor): shape (B, n_jet_vars)
             track_features (torch.Tensor): shape (B, T, n_track_vars)
-            mask           (torch.Tensor): shape (B, T),  True = real track, False = padding
+            mask (torch.Tensor): shape (B, T),  True = real track, False = padding
 
         Returns:
             dict with keys:
-              'jet_outputs' : (torch.Tensor): shape (B, n_classes)
+              "jet_outputs" : (torch.Tensor): shape (B, n_classes)
         """
         _, T, _ = track_features.shape
 
@@ -369,9 +369,9 @@ class GN2(nn.Module):
         Predict class probabilities for the jet classification head.
 
         Args:
-            jet_features   (torch.Tensor): shape (B, n_jet_vars)
+            jet_features (torch.Tensor): shape (B, n_jet_vars)
             track_features (torch.Tensor): shape (B, T, n_track_vars)
-            mask           (torch.Tensor): shape (B, T),  True = real track, False = padding
+            mask (torch.Tensor): shape (B, T),  True = real track, False = padding
         
         Returns:
             (torch.Tensor): shape (B, n_classes), predicted class probabilities
@@ -395,12 +395,12 @@ class GN2(nn.Module):
             D_b = log( p_b / (fc*p_c + ftau*p_tau + (1-fc-ftau)*p_light) )
 
         Args:
-            jet_features   (torch.Tensor): shape (B, n_jet_vars)
+            jet_features (torch.Tensor): shape (B, n_jet_vars)
             track_features (torch.Tensor): shape (B, T, n_track_vars)
-            mask           (torch.Tensor): shape (B, T),  True = real track, False = padding
-            fc             (float): fraction of c-jets
-            ftau           (float): fraction of tau-jets
-            label_map      (dict[str, int], optional): mapping from class names to indices
+            mask (torch.Tensor): shape (B, T),  True = real track, False = padding
+            fc (float): fraction of c-jets
+            ftau (float): fraction of tau-jets
+            label_map (dict[str, int], optional): mapping from class names to indices
 
         Returns:
             (torch.Tensor): shape (B,), the b-tagging discriminant D_b
@@ -431,12 +431,12 @@ class GN2(nn.Module):
             D_c = log( p_c / (fb*p_b + ftau*p_tau + (1-fb-ftau)*p_light) )
 
         Args:
-            jet_features   (torch.Tensor): shape (B, n_jet_vars)
+            jet_features (torch.Tensor): shape (B, n_jet_vars)
             track_features (torch.Tensor): shape (B, T, n_track_vars)
-            mask           (torch.Tensor): shape (B, T),  True = real track, False = padding
-            fb             (float): fraction of b-jets
-            ftau           (float): fraction of tau-jets
-            label_map      (dict[str, int], optional): mapping from class names to indices
+            mask (torch.Tensor): shape (B, T),  True = real track, False = padding
+            fb (float): fraction of b-jets
+            ftau (float): fraction of tau-jets
+            label_map (dict[str, int], optional): mapping from class names to indices
 
         Returns:
             (torch.Tensor): shape (B,), the c-tagging discriminant D_c
