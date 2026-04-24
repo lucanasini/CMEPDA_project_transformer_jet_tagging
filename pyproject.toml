@@ -9,7 +9,7 @@ dynamic = ["version"]
 description = "A repository about jet tagging using transformers"
 readme = "README.md"
 license = { file = "LICENSE" }
-requires-python = ">=3.13"
+requires-python = ">=3.12"
 authors = [
   { name = "Luca Nasini", email = "lucanas2003@gmail.com" }
   ]
