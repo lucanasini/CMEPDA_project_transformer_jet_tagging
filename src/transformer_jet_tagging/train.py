@@ -17,7 +17,6 @@ import logging
 from pathlib import Path
 
 import numpy as np
-from tqdm import tqdm
 import torch
 import torch.nn as nn
 from torch.optim import AdamW
@@ -139,7 +138,6 @@ def run_epoch(
     device: torch.device,
     is_train: bool,
     scaler: torch.amp.GradScaler = None,
-    pbar: tqdm = None,
 ) -> dict:
     """
     Run one full epoch.
@@ -153,7 +151,6 @@ def run_epoch(
         device (torch.device): Device to move tensors to.
         is_train (bool): True for training, False for validation.
         scaler (torch.amp.GradScaler): optional GradScaler for mixed precision training (default: None).
-        pbar (tqdm): optional tqdm progress bar to update during training (default: None).
 
     Returns:
         dict with averaged loss.
@@ -198,10 +195,6 @@ def run_epoch(
             for k in totals:
                 totals[k] += losses[k].item()
             n_batches += 1
-
-            if pbar is not None and is_train:
-                pbar.update(1)
-                pbar.set_postfix_str(f"loss: {totals['total']/n_batches:.4f}")
 
     return {k: v / max(n_batches, 1) for k, v in totals.items()}
 
@@ -260,31 +253,21 @@ def train(
 
     for epoch in range(1, n_epochs + 1):
 
-        tqdm.write(f"\nEpoch {epoch}/{n_epochs}")
-
-        pbar = tqdm(
-            total      = len(train_loader),
-            bar_format = "{n_fmt}/{total_fmt} {bar} {elapsed}<{remaining},"
-                         " {rate_fmt}{postfix}",
-            ascii      = "━━",
-            ncols      = 80,
-            leave      = True,
-            mininterval= 0,
-            miniters   = 1,
-        )
         train_losses = run_epoch(model, train_loader, loss, optimiser,
-                                 lr_decay, device, is_train=True,  scaler=scaler, pbar=pbar)
+                                 lr_decay, device, is_train=True,  scaler=scaler)
         val_losses   = run_epoch(model, val_loader,   loss, optimiser,
                                  lr_decay, device, is_train=False)
 
         lr_now = lr_decay.get_last_lr()[0]
 
-        pbar.set_postfix_str(
-            f"loss: {train_losses['total']:.4f} - "
-            f"val_loss: {val_losses['total']:.4f} - "
-            f"lr: {lr_now:.2e}"
+        logger.info(
+            f"Epoch {epoch:3d}/{n_epochs} | "
+            f"train loss={train_losses['total']:.4f} | "
+            f"(jet={train_losses['jet']:.4f}) | "
+            f"val={val_losses['total']:.4f} | "
+            f"lr={lr_now:.2e}"
         )
-        pbar.close()
+
         for k, v in train_losses.items():
             writer.add_scalar(f"train/{k}", v, epoch)
         for k, v in val_losses.items():
@@ -300,10 +283,10 @@ def train(
                 "val_loss"   : best_val_loss,
                 "config"     : config,
             }, checkpoint_path)
-            tqdm.write(f"    New best val_loss={best_val_loss:.4f} - {checkpoint_path}")
+            logger.info(f"    New best val_loss={best_val_loss:.4f} - saved to {checkpoint_path}")
 
     writer.close()
-    tqdm.write("\nTraining complete.")
+    logger.info("Training complete.")
 
     # reload best weights before returning
     model.load_state_dict(torch.load(checkpoint_path, map_location=device, weights_only=True)["model_state"])
