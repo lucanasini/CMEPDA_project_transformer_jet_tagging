@@ -9,8 +9,12 @@ Provides:
   - run_epoch    : single epoch train/val loop
   - train        : full training loop, callable from main.py
 
-Standalone usage (debug):
-  python -m src.trasformer_jet_tagging.train --config configs/config.json
+Outputs (under the directory specified in config["output"]["checkpoints_dir"]):
+  outputs/checkpoints/
+  ├── runs/
+  │   ├── events.out.tfevents.xxxx
+  │   └── …
+  └── best_model.pt
 """
 
 import logging
@@ -261,8 +265,8 @@ def train(
         lr_now = lr_decay.get_last_lr()[0]
 
         logger.info(
-            f"Epoch {epoch:3d}/{n_epochs} | "
-            f"train loss={train_losses['total']:.4f} | "
+            f"Epoch {epoch:4d}/{n_epochs} | "
+            f"train loss={train_losses['total']:.4f} "
             f"(jet={train_losses['jet']:.4f}) | "
             f"val={val_losses['total']:.4f} | "
             f"lr={lr_now:.2e}"
@@ -374,7 +378,7 @@ if __name__ == "__main__":
     train_loader = GN2DataLoader(train_dataset, **loader_kwargs, shuffle=config["data"].get("shuffle", False))
     val_loader   = GN2DataLoader(val_dataset, **loader_kwargs, shuffle=False)
 
-    device    = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
     model_config = config.get("model", {})
     model = GN2(

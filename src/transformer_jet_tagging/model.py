@@ -24,7 +24,7 @@ Architecture:
     - Per-track projection: track embeddings       (dim 128)
 
   Task-specific heads  (3 hidden layers: 128 -> 64 -> 32):
-    1. Jet classification     (primary)    : 4 classes  (b, c, light, tau)
+    1. Jet classification (primary): 4 classes  (b, c, light, tau)
 """
 
 import logging
@@ -154,19 +154,16 @@ class AttentionPooling(nn.Module):
     """
     def __init__(
         self,
-        dim_in: int,
-        dim_out: int
+        dim_in: int
     ):
         """
         Initialize the attention pooling layer.
 
         Args:
             d_in (int): input embedding dimension (from transformer)
-            d_out (int): output embedding dimension (for jet representation)
         """
         super().__init__()
         self.query    = nn.Linear(dim_in, 1)        # "score" for each track embedding
-        self.proj_out = nn.Linear(dim_in, dim_out)  # final projection of pooled representation
 
     def forward(
         self,
@@ -191,7 +188,7 @@ class AttentionPooling(nn.Module):
         scores = scores.masked_fill(all_masked.expand_as(scores), 0.0)  # uniform fallback
         weights = torch.softmax(scores, dim=-1)
         pooled  = (weights.unsqueeze(-1) * x).sum(dim=1)    # (B, d_in)
-        return self.proj_out(pooled)                        # (B, d_out)
+        return pooled
 
 
 def _mlp(in_dim: int, hidden_dims: list[int], out_dim: int, activation: str = "relu") -> nn.Sequential:
@@ -301,11 +298,11 @@ class GN2(nn.Module):
         ])
         self.final_norm = nn.LayerNorm(embed_dim)   # post-encoder norm
 
-        # # 3. Per-track projection ("embed_dim" -> "pool_dim") TODO: for auxiliary tasks that require track-level outputs (origin, vertex)
-        # self.track_proj = nn.Linear(embed_dim, pool_dim)
+        # 3. Per-track projection ("embed_dim" -> "pool_dim")
+        self.track_proj = nn.Linear(embed_dim, pool_dim)
 
-        # 4. Attention pooling ("embed_dim" -> "pool_dim")
-        self.pool = AttentionPooling(embed_dim, pool_dim)
+        # 4. Attention pooling ("pool_dim")
+        self.pool = AttentionPooling(pool_dim)
 
         # 5. Task heads (3 hidden layers: 128 -> 64 -> 32)
         self.jet_head = _mlp(pool_dim, head_hidden_dims, n_classes, activation)
@@ -348,10 +345,13 @@ class GN2(nn.Module):
             x = layer(x, key_padding_mask=mask)
         x = self.final_norm(x)          # (B, T, embed_dim)
 
-        # 4. Attention pooling: global jet representation
+        # 4. Project track down to pool_dim
+        x = self.track_proj(x)          # (B, T, pool_dim)
+
+        # 5. Attention pooling: global jet representation
         jet_rep = self.pool(x, padding_mask=mask)   # (B, pool_dim)
 
-        # 5. Primary head: jet classification
+        # 6. Primary head: jet classification
         jet_outputs = self.jet_head(jet_rep)         # (B, n_classes)
 
         return {

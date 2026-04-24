@@ -21,7 +21,6 @@ dependencies = [
   "scikit-learn",
   "mplhep",
   "tensorboard",
-  "tqdm",
   ]
 
 
@@ -31,9 +30,6 @@ dev = [
     "ruff",
     "pylint",
   ]
-tests = [
-    "pytest",
-]
 docs = [
     "sphinx",
     "sphinx-rtd-theme",

@@ -2,42 +2,59 @@
 
 [![Tests](https://github.com/lucanasini/CMEPDA_project_transformer_jet_tagging/actions/workflows/tests.yml/badge.svg)](https://github.com/lucanasini/CMEPDA_project_transformer_jet_tagging/actions/workflows/tests.yml)
 [![Docs](https://github.com/lucanasini/CMEPDA_project_transformer_jet_tagging/actions/workflows/docs.yml/badge.svg)](https://lucanasini.github.io/CMEPDA_project_transformer_jet_tagging/)
+![pytorch](https://img.shields.io/badge/PyTorch-EE4C2C?logo=pytorch)
+![model](https://img.shields.io/badge/model-transformer-orange)
+![cuda](https://img.shields.io/badge/CUDA-11.8-green)
+![cuda](https://img.shields.io/badge/CUDA-12.1-green)
+![license](https://img.shields.io/github/license/USER/REPO)
+![CI](https://img.shields.io/github/actions/workflow/status/USER/REPO/workflow.yml)
+![coverage](https://img.shields.io/codecov/c/github/USER/REPO)
+![PyPI](https://img.shields.io/pypi/v/packagename)
+![Python](https://img.shields.io/pypi/pyversions/packagename)
 
-Implementazione del tagger GN2 descritto in:
+Implementation of the GN2 tagger described in:
 > *"Transforming jet flavour tagging at ATLAS"*, Nature Communications (2026) 17:541
 
-Versione semplificata con solo il **jet flavour classification head**
-(senza gli obiettivi ausiliari di track origin e vertex grouping).
+Simplified version with only the **jet flavor classification head**
+(without the auxiliary objectives of track origin and vertex grouping).
 
 ---
 
-## Struttura del progetto
+## Project Structure
 
 ```
 CMEPDA_project_transformer_jet_tagging/
 ├── main.py                         ← entry point
 ├── configs/
 │   └── config.json                 ← all hyperparams and settings
-│   └── default.yaml                ← tutti gli iperparametri
 ├── dataset/
-│   └── mc-flavtag-ttbar-small.h5   ← put here the .h5 file
+│   └── mc-flavtag-ttbar-*.h5       ← put here the .h5 file
 ├── src/trasformer_jet_tagging/
-│   ├── dataset.py                  ← data loading, preprocessing
-│   ├── model.py                    ← architettura GN2 (transformer)
-│   ├── discriminant.py             ← D_b, D_c, operating points
-│   ├── train.py                    ← training loop
+│   ├── __init__.py                 ← package init
+│   ├── _version.py                 ← package version
+│   ├── constants.py                ← feature names, class mapping
+│   ├── dataset.py                  ← dataset and data loading
+│   ├── model.py                    ← GN2 architecture (transformer) and D_b, D_c discriminant
+│   ├── train.py                    ← GN2 loss, learning rate scheduler and training loop
 │   ├── evaluate.py                 ← valutazione, plot
+│   ├── plotting.py                 ← plotting functions (variables distributions and correlations, learning curves)
 │   └── utils.py                    ← utility functions
-└── outputs/                        ← creata automaticamente
-    ├── best_model.pt
-    ├── last_model.pt
-    ├── scaler.pkl
-    ├── run.log
-    ├── rejection_curves.png
-    ├── discriminant_distribution.png
-    ├── training_history.png
-    ├── test_probs.npy
-    └── test_labels.npy
+├── tests/                          ← unit tests
+│   ├── conftest.py                 ← package init
+│   ├── test_dataset.py
+│   ├── test_model.py
+│   ├── test_train.py
+│   └── test_utils.py
+└── outputs/
+    ├── checkpoints/
+    │   ├── runs/
+    │   │   └── events.out.tfevents.xxxx
+    │   └── best_model.pt
+    ├── plots/
+    │   └── *
+    └── preprocess/
+        ├── runs/
+        └── norm_stats.json
 ```
 
 ---
@@ -51,6 +68,9 @@ torch>=2.10.0
 numpy>=2.4.0
 h5py>=3.16.0
 scikit-learn>=1.8.0
+tensorboard>=2.20.0
+matplotlib>=3.10.8
+mplhep>=1.1.2
 ```
 
 ---
@@ -109,119 +129,97 @@ Update the file name in
 ### Full training (default config)
 
 ```bash
-python main.py
-```
-
-Usa automaticamente `configs/config.json` e salva tutto in `outputs/`.
-
-### Specificare file dati e output
-
-```bash
 python main.py --config configs/config.json
 ```
 
 ---
 
-## Output prodotti
+## Outputs
+The trained model and training logs will be saved in the directory specified in `config["output"]["preprocess_dir"]` (default: `outputs/checkpoints/`):
 
-Dopo il training troverai in `outputs/`:
-
-| File | Descrizione |
-|---|---|
-| `best_model.pt` | Checkpoint con la miglior validation loss |
-| `last_model.pt` | Checkpoint dell'ultima epoca |
-| `scaler.pkl` | Normalizzatore fittato su train (serve per inference) |
-| `run.log` | Log completo del training |
-| `rejection_curves.png` | c-jet e light-jet rejection vs b-jet efficiency |
-| `discriminant_distribution.png` | Distribuzione di D_b per classe |
-| `training_history.png` | Train/val loss e learning rate per epoca |
-| `test_probs.npy` | Probabilità [pb, pc, pu, ptau] sul test set |
-| `test_labels.npy` | Label vere sul test set |
-
----
-
-## Configurazione
-
-Tutti i parametri si trovano in `configs/default.yaml`.
-I più importanti da modificare:
-
-```yaml
-data:
-  h5_path: "data/jets.h5"    # percorso al file HDF5
-  max_tracks: 40              # paper GN2: 40
-
-training:
-  max_epochs: 100
-  batch_size: 12000           # paper GN2: 12000; riduci se OOM
-  device: "auto"              # "cuda", "cpu", o "auto"
-
-model:
-  transformer_n_layers: 4     # paper GN2: 4
-  transformer_n_heads: 8      # paper GN2: 8
 ```
-
-### Out of Memory (GPU)
-
-Se ricevi errori CUDA OOM, riduci il batch size:
-```yaml
-training:
-  batch_size: 4096   # o anche 1024
+outputs/checkpoints/
+├── runs/
+│   ├── events.out.tfevents.xxxx
+│   └── …
+└── best_model.pt
 ```
 
 ---
 
-## Feature usate
+## Configuration
 
-### Jet-level (njf = 2)
-- `pt_btagJes` — pT calibrato (log-trasformato)
-- `eta_btagJes` — η calibrato
+All hyperparameters and settings are in `configs/config.json`. You can edit it directly or pass a different config file with `--config`.
 
-### Track-level (ntf = 24)
-Le feature più discriminanti secondo il paper sono:
-- `lifetimeSignedD0Significance` — d₀/σ(d₀) con segno lifetime
-- `lifetimeSignedZ0SinThetaSignificance` — z₀sinθ/σ con segno lifetime
+---
 
-Tutte le 24 feature track sono listate in `configs/default.yaml`.
+## Features and Target
+
+### Input features
+- Jet features (2):
+  - `jet_pt`: transverse momentum of the jet
+  - `jet_eta`: pseudorapidity of the jet
+- Track features (19):
+  - `qOverP`: charge over momentum
+  - `deta`: difference in pseudorapidity between the track and the jet
+  - `dphi`: difference in azimuthal angle between the track and the jet
+  - `d0`: transverse impact parameter
+  - `z0SinTheta`: longitudinal impact parameter times sin(theta)
+  - `qOverPUncertainty`: uncertainty on qOverP
+  - `thetaUncertainty`: uncertainty on theta
+  - `phiUncertainty`: uncertainty on phi
+  - `lifetimeSignedD0Significance`: signed transverse impact parameter significance
+  - `lifetimeSignedZ0SinThetaSignificance`: signed longitudinal impact parameter significance
+  - `numberOfPixelHits`: number of pixel hits
+  - `numberOfSCTHits`: number of SCT hits
+  - `numberOfInnermostPixelLayerHits`: number of hits in the innermost pixel layer
+  - `numberOfNextToInnermostPixelLayerHits`: number of hits in the next-to-innermost pixel layer
+  - `numberOfInnermostPixelLayerSharedHits`: number of shared hits in the innermost pixel layer
+  - `numberOfInnermostPixelLayerSplitHits`: number of split hits in the innermost pixel layer
+  - `numberOfPixelSharedHits`: number of shared hits in the pixel detector
+  - `numberOfPixelSplitHits`: number of split hits in the pixel detector
+  - `numberOfSCTSharedHits`: number of shared hits in the SCT detector
 
 ### Target
-- `HadronConeExclTruthLabelID`: PDG ID → classe
-  - 5 → b-jet (0)
-  - 4 → c-jet (1)
-  - 0 → light-jet (2)
-  - 15 → τ-jet (3)
+- `HadronConeExclTruthLabelID`: PDG ID → class
+  - 5 → 0 (b-jet)
+  - 4 → 1 (c-jet)
+  - 0 → 2 (light-jet)
+  - 15 → 3 (τ-jet)
 
 ---
 
-## Architettura (fedele al paper)
+## Architecture
 
 ```
-Per ogni jet (B jet nel batch):
+For each jet (B = batch size):
 
   [jet_pt, jet_eta]               (2 feature)
-  [40 tracce × 19 feature]        + maschera booleana
+  [40 tracks × 19 feature]        + boolean mask
         │
         ▼
-  Concatena jet features a ogni traccia → (B, 40, 26)
+  Concanate jet features to each tracks (B, 40, 21)
         │
         ▼
-  Track Initialiser MLP: 26 → 256 → 256   (hidden=256)
+  Track Initialiser MLP: 21 → 256 → 256
         │
         ▼
   Transformer Encoder × 4 layer
-  (8 heads, embed=256, ffn=512, preLayerNorm, attention masking)
+  (8 heads, embed=256, ffn=512, preLayerNorm)
         │
         ▼
-  Proiezione: 256 → 128
+  Projection: 256 → 128
         │
         ▼
   Attention Pooling → (B, 128)   [jet representation]
         │
         ▼
-  Classification Head: 128 → 64 → 32 → 4
+  Classification Head: 128 → 128 → 64 → 32 → 4
         │
         ▼
-  Logit → softmax → [pb, pc, pu, pτ]
+  Softmax → [pb, pc, pu, pτ]
         │
         ▼
-  D_b = log[ pb / (0.2·pc + 0.05·pτ + 0.75·pu) ]
+  D_b = log[ pb / (0.2 pc + 0.05 pτ + 0.75 pu) ]
+  D_c = log[ pb / (0.3 pb + 0.01 pτ + 0.69 pu) ]
 ```
