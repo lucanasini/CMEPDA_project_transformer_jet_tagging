@@ -1,11 +1,19 @@
 transformer\_jet\_tagging package
-================================
+=================================
 
 Submodules
 ----------
 
+transformer\_jet\_tagging.constants module
+------------------------------------------
+
+.. automodule:: transformer_jet_tagging.constants
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
 transformer\_jet\_tagging.dataset module
----------------------------------------
+----------------------------------------
 
 .. automodule:: transformer_jet_tagging.dataset
    :members:
@@ -13,7 +21,7 @@ transformer\_jet\_tagging.dataset module
    :undoc-members:
 
 transformer\_jet\_tagging.discriminant module
---------------------------------------------
+---------------------------------------------
 
 .. automodule:: transformer_jet_tagging.discriminant
    :members:
@@ -21,7 +29,7 @@ transformer\_jet\_tagging.discriminant module
    :undoc-members:
 
 transformer\_jet\_tagging.evaluate module
-----------------------------------------
+-----------------------------------------
 
 .. automodule:: transformer_jet_tagging.evaluate
    :members:
@@ -29,7 +37,7 @@ transformer\_jet\_tagging.evaluate module
    :undoc-members:
 
 transformer\_jet\_tagging.model module
--------------------------------------
+--------------------------------------
 
 .. automodule:: transformer_jet_tagging.model
    :members:
@@ -37,7 +45,7 @@ transformer\_jet\_tagging.model module
    :undoc-members:
 
 transformer\_jet\_tagging.plotting module
-----------------------------------------
+-----------------------------------------
 
 .. automodule:: transformer_jet_tagging.plotting
    :members:
@@ -45,7 +53,7 @@ transformer\_jet\_tagging.plotting module
    :undoc-members:
 
 transformer\_jet\_tagging.preprocess module
-------------------------------------------
+-------------------------------------------
 
 .. automodule:: transformer_jet_tagging.preprocess
    :members:
@@ -53,7 +61,7 @@ transformer\_jet\_tagging.preprocess module
    :undoc-members:
 
 transformer\_jet\_tagging.train module
--------------------------------------
+--------------------------------------
 
 .. automodule:: transformer_jet_tagging.train
    :members:
@@ -61,7 +69,7 @@ transformer\_jet\_tagging.train module
    :undoc-members:
 
 transformer\_jet\_tagging.utils module
--------------------------------------
+--------------------------------------
 
 .. automodule:: transformer_jet_tagging.utils
    :members:

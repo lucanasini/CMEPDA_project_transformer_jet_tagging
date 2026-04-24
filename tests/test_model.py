@@ -62,7 +62,7 @@ def test_discriminant_db_shape(dummy_input):
         n_track_vars = 4
     )
 
-    d = model.discriminant_db(**dummy_input)
+    d = model.discriminant_db(**dummy_input, label_map={"b-jet":0, "c-jet":1, "light-jet":2, "tau-jet":3})
 
     assert d.shape == (2,)
     assert isinstance(d, torch.Tensor)
@@ -75,7 +75,7 @@ def test_discriminant_dc_shape(dummy_input):
         n_track_vars = 4
     )
 
-    d = model.discriminant_dc(**dummy_input)
+    d = model.discriminant_dc(**dummy_input, label_map={"b-jet":0, "c-jet":1, "light-jet":2, "tau-jet":3})
 
     assert d.shape == (2,)
     assert isinstance(d, torch.Tensor)
@@ -88,7 +88,7 @@ def test_discriminant_db_finite(dummy_input):
         n_track_vars = 4
     )
 
-    d = model.discriminant_db(**dummy_input)
+    d = model.discriminant_db(**dummy_input, label_map={"b-jet":0, "c-jet":1, "light-jet":2, "tau-jet":3})
 
     assert torch.isfinite(d).all()
 
@@ -100,7 +100,7 @@ def test_discriminant_dc_finite(dummy_input):
         n_track_vars = 4
     )
 
-    d = model.discriminant_dc(**dummy_input)
+    d = model.discriminant_dc(**dummy_input, label_map={"b-jet":0, "c-jet":1, "light-jet":2, "tau-jet":3})
 
     assert torch.isfinite(d).all()
 

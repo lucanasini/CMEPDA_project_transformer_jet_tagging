@@ -5,10 +5,11 @@ High-performance GN2 data pipeline for HDF5 datasets.
 Optimized for large-scale Jet Flavour Tagging at ATLAS.
 
 HDF5 Structure:
-  /jets          - jet-level features (1 row per jet).
-  /tracks        - track-level features.
-  /eventwise     - event-level metadata.
-  /truth_hadrons - simulation truth for hadron labeling and performance studies.
+
+  - "/jets"          - jet-level features (1 row per jet).
+  - "/tracks"        - track-level features.
+  - "/eventwise"     - event-level metadata.
+  - "/truth_hadrons" - simulation truth for hadron labeling and performance studies.
 
 The pipeline utilises "lazy loading" via h5py to handle datasets that exceed
 available RAM, using NumPy vectorization for high-speed feature extraction.
@@ -34,13 +35,17 @@ Pipeline Workflow:
    Wraps everything into a PyTorch DataLoader with optimized batching.
 
 Performance notes:
+
   - Indices passed to GN2Dataset MUST be sorted to ensure
     contiguous HDF5 reads and avoid random seeks on disk.
+
   - Use GN2DataLoader() which sets up the BatchCollator automatically.
     This replaces per-item __getitem__ HDF5 access with a single batched
     read per batch, reducing I/O overhead by orders of magnitude.
+
   - num_workers should be 0 when using BatchCollator (the collate_fn
     already parallelises I/O at the batch level via sorted slice reads).
+
   - _get_handler() is thread-safe via a per-instance Lock, but h5py file
     handles are NOT shared across processes: each DataLoader worker opens
     its own handle automatically on first access.
@@ -55,7 +60,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader, BatchSampler, SequentialSampler, RandomSampler
 
-from src.transformer_jet_tagging.constants import (
+from .constants import (
     JET_VARS_DEFAULT,
     TRACK_VARS_DEFAULT,
     JET_FLAVOUR_LABEL,
@@ -170,7 +175,7 @@ class GN2Dataset(Dataset):
         Apply log-transform to pT and optional Z-score normalization.
 
         Args:
-            jet_pt  (np.ndarray): shape (n,), raw jet transverse momentum in MeV.
+            jet_pt (np.ndarray): shape (n,), raw jet transverse momentum in MeV.
             jet_eta (np.ndarray): shape (n,), raw jet pseudorapidity.
 
         Returns:
@@ -201,7 +206,7 @@ class GN2Dataset(Dataset):
 
         Returns:
             track_features (np.ndarray): shape (n_tracks, n_track_vars), float32.
-            padding_mask   (np.ndarray): shape (n_tracks,), bool; True = real track.
+            padding_mask (np.ndarray): shape (n_tracks,), bool; True = real track.
         """
         track_features = np.zeros((self.n_tracks, len(self.track_vars)), dtype=np.float32)
         padding_mask   = np.zeros(self.n_tracks, dtype=bool)
@@ -260,10 +265,10 @@ class GN2Dataset(Dataset):
 
         Returns:
             dict with keys:
-                "jet_features"   (torch.Tensor, shape (n_jet_vars,))
+                "jet_features" (torch.Tensor, shape (n_jet_vars,))
                 "track_features" (torch.Tensor, shape (n_tracks, n_track_vars))
-                "mask"           (torch.Tensor, shape (n_tracks,))
-                "label"          (torch.Tensor, scalar long)
+                "mask" (torch.Tensor, shape (n_tracks,))
+                "label" (torch.Tensor, scalar long)
         """
         f        = self._get_handler()
         real_idx = self.indices[idx]    # maps the dataset index to the actual jet index in the file
@@ -379,10 +384,10 @@ class _BatchCollator:
 
         Returns:
             dict with keys:
-                "jet_features"   (torch.Tensor, shape (B, n_jet_vars))
+                "jet_features" (torch.Tensor, shape (B, n_jet_vars))
                 "track_features" (torch.Tensor, shape (B, n_tracks, n_track_vars))
-                "mask"           (torch.Tensor, shape (B, n_tracks))
-                "label"          (torch.Tensor, shape (B,))
+                "mask" (torch.Tensor, shape (B, n_tracks))
+                "label" (torch.Tensor, shape (B,))
         """
         dataset = self.dataset
         f       = dataset._get_handler()
@@ -482,12 +487,12 @@ def GN2DataLoader(
     Build a DataLoader that uses _BatchCollator for fast batched HDF5 reads.
 
     Args:
-        dataset     (GN2Dataset): dataset instance with sorted indices.
-        batch_size  (int): number of jets per batch.
-        shuffle     (bool): whether to shuffle the order of batches.
+        dataset (GN2Dataset): dataset instance with sorted indices.
+        batch_size (int): number of jets per batch.
+        shuffle (bool): whether to shuffle the order of batches.
         num_workers (int): DataLoader worker processes.
-        pin_memory  (bool): pin CPU tensors for faster GPU transfer.
-        drop_last   (bool): drop incomplete last batch.
+        pin_memory (bool): pin CPU tensors for faster GPU transfer.
+        drop_last (bool): drop incomplete last batch.
 
     Returns:
         (DataLoader): configured loader.
@@ -512,7 +517,7 @@ if __name__ == "__main__":
     import argparse
     import sys
     import time
-    from src.transformer_jet_tagging.utils import compute_normalization_stats, load_config_json
+    from .utils import compute_normalization_stats, load_config_json
     from sklearn.model_selection import train_test_split
 
     parser = argparse.ArgumentParser(

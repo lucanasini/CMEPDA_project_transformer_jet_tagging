@@ -12,7 +12,7 @@ import numpy as np
 import h5py
 from sklearn.preprocessing import StandardScaler
 
-from src.transformer_jet_tagging.constants import JET_VARS_DEFAULT, TRACK_VARS_DEFAULT
+from .constants import JET_VARS_DEFAULT, TRACK_VARS_DEFAULT
 
 logger = logging.getLogger("GN2.utils")
 
@@ -33,21 +33,19 @@ def compute_normalization_stats(
     data leakage into validation and test sets.
 
     Args:
-        file_path       (str):              Path to the HDF5 file containing jets and tracks data.
-        train_indices   (np.ndarray):       Array of integer indices identifying the training jets within the HDF5 file.
-        jet_vars        (list, optional):   List of jet-level variable names to include.
-                                            Defaults to JET_VARS_DEFAULT if not provided.
-        track_vars      (list, optional):   List of track-level variable names to include.
-                                            Defaults to TRACK_VARS_DEFAULT if not provided.
-        batch_size      (int, optional):    Number of jets to process per batch during the partial_fit loop. Controls peak memory usage.
-                                            Defaults to 10_000.
+        file_path (str): Path to the HDF5 file containing jets and tracks data.
+        train_indices (np.ndarray): Array of integer indices identifying the training jets within the HDF5 file.
+        jet_vars (list, optional): List of jet-level variable names to include. Defaults to JET_VARS_DEFAULT if not provided.
+        track_vars (list, optional): List of track-level variable names to include. Defaults to TRACK_VARS_DEFAULT if not provided.
+        batch_size (int, optional): Number of jets to process per batch during the partial_fit loop. Controls peak memory usage. Defaults to 10_000.
 
     Returns:
         dict: Normalization statistics with the following keys:
-            "jet_mu"        (np.ndarray, shape (n_jet_vars,)):      Per-feature mean for jet-level variables.
-            "jet_sigma"     (np.ndarray, shape (n_jet_vars,)):      Per-feature standard deviation for jet-level variables.
-            "track_mu"      (np.ndarray, shape (n_track_vars,)):    Per-feature mean computed over all valid tracks in the training set.
-            "track_sigma"   (np.ndarray, shape (n_track_vars,)):    Per-feature standard deviation over all valid tracks in the training set.
+
+            - "jet_mu" (np.ndarray, shape (n_jet_vars,)): Per-feature mean for jet-level variables.
+            - "jet_sigma" (np.ndarray, shape (n_jet_vars,)): Per-feature standard deviation for jet-level variables.
+            - "track_mu" (np.ndarray, shape (n_track_vars,)): Per-feature mean computed over all valid tracks in the training set.
+            - "track_sigma" (np.ndarray, shape (n_track_vars,)): Per-feature standard deviation over all valid tracks in the training set.
     """
 
     jet_vars   = jet_vars   if jet_vars   is not None else JET_VARS_DEFAULT

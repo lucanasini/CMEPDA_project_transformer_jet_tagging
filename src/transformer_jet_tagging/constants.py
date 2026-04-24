@@ -1,6 +1,6 @@
 """
 constants.py
-===========
+============
 Constants and default variable lists for the transformer jet tagging project.
 """
 

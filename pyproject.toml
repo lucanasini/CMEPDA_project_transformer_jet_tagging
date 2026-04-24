@@ -1,0 +1,85 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+
+[project]
+name = "CMEPDA_project_transformer_jet_tagging"
+dynamic = ["version"]
+description = "A repository about jet tagging using transformers"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.13"
+authors = [
+  { name = "Luca Nasini", email = "lucanas2003@gmail.com" }
+  ]
+dependencies = [
+  "numpy",
+  ]
+
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "ruff",
+    "pylint",
+  ]
+docs = [
+    "sphinx",
+    "sphinxawesome-theme",
+  ]
+
+
+[project.urls]
+Homepage = "https://github.com/lucanasini/CMEPDA_project_transformer_jet_tagging"
+Issues = "https://github.com/lucanasini/CMEPDA_project_transformer_jet_tagging/issues"
+
+
+[tool.hatch.version]
+path = "src/transformer_jet_tagging/_version.py"
+
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/transformer_jet_tagging"]
+
+
+[tool.ruff]
+target-version = "py37"
+line-length = 100
+src = ["src"]
+exclude = ["docs"]
+
+
+[tool.ruff.lint]
+select = [
+  "E",   # pycodestyle errors
+  "F",   # pyflakes
+  "I",   # isort (imports)
+  "B",   # flake8-bugbear
+  "UP",  # pyupgrade (kept safe for py37)
+  "SIM", # flake8-simplify
+  "C4",  # flake8-comprehensions
+  "NPY", # NumPy-specific best practices
+  "PERF" # performance gotchas
+  ]
+ignore = [
+  "C408" # I sometimes like dict() calls better than literal dicts
+  ]
+
+
+[tool.pylint.'MESSAGES CONTROL']
+disable = [
+  "missing-docstring",
+  "too-few-public-methods",
+  "too-many-arguments",
+  "too-many-positional-arguments",
+  "too-many-instance-attributes",
+  "too-many-locals",
+  "use-dict-literal",
+  ]
+
+[tool.pylint.'BASIC']
+good-names = ["i", "j", "k", "x", "y", "z"]
+
+[tool.pylint.'FORMAT']
+max-line-length = 100

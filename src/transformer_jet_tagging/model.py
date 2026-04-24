@@ -33,7 +33,7 @@ from typing import Optional, Dict
 import torch
 import torch.nn as nn
 
-from src.transformer_jet_tagging.constants import FLAVOUR_LABELS
+from .constants import FLAVOUR_LABELS
 
 logger = logging.getLogger("GN2.model")
 
@@ -388,7 +388,7 @@ class GN2(nn.Module):
         mask          : torch.Tensor,
         fc            : float = 0.2,
         ftau          : float = 0.05,
-        label_map     : Dict[str, int] = None
+        label_map     : Dict[str, int] = None,
     ) -> torch.Tensor:
         """
         Compute the b-tagging discriminant D_b:
@@ -414,7 +414,7 @@ class GN2(nn.Module):
         pu   = proba[:, label_map["light-jet"]]
         ptau = proba[:, label_map["tau-jet"]]
         denom = fc * pc + ftau * ptau + (1 - fc - ftau) * pu
-        return torch.log(pb / denom.clamp(min=1e-9))
+        return torch.log((pb / denom).clamp(min=1e-8))
     
     @torch.no_grad()
     def discriminant_dc(
@@ -424,6 +424,7 @@ class GN2(nn.Module):
         mask          : torch.Tensor,
         fb            : float = 0.3,
         ftau          : float = 0.01,
+        label_map     : Dict[str, int] = None,
     ) -> torch.Tensor:
         """
         Compute the c-tagging discriminant D_c:
@@ -435,6 +436,7 @@ class GN2(nn.Module):
             mask           (torch.Tensor): shape (B, T),  True = real track, False = padding
             fb             (float): fraction of b-jets
             ftau           (float): fraction of tau-jets
+            label_map      (dict[str, int], optional): mapping from class names to indices
 
         Returns:
             (torch.Tensor): shape (B,), the c-tagging discriminant D_c
@@ -448,4 +450,4 @@ class GN2(nn.Module):
         pu   = proba[:, label_map["light-jet"]]
         ptau = proba[:, label_map["tau-jet"]]
         denom = fb * pb + ftau * ptau + (1 - fb - ftau) * pu
-        return torch.log(pc / denom.clamp(min=1e-9))
+        return torch.log((pc / denom).clamp(min=1e-8))

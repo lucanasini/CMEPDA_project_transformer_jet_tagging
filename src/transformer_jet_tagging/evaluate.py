@@ -29,9 +29,9 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay, roc_curve, auc
 from torch.utils.data import DataLoader
 
-import src.transformer_jet_tagging.utils as utils
-from src.transformer_jet_tagging.dataset import GN2Dataset
-from src.transformer_jet_tagging.model import GN2
+from . import utils
+from .dataset import GN2Dataset
+from .model import GN2
 
 # ---------------------------------------------------------------------------
 # Logging

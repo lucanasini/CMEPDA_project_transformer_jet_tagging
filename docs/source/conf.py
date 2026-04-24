@@ -1,37 +1,69 @@
 # Configuration file for the Sphinx documentation builder.
-#
 # For the full list of built-in configuration values, see the documentation:
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 
-# -- Project information -----------------------------------------------------
+import importlib.metadata
+
+from transformer_jet_tagging import __version__
+
+__package_name__ = "CMEPDA_project_transformer_jet_tagging"
+
+# Get package metadata.
+_metadata = importlib.metadata.metadata(__package_name__)
+
+
+# --- Project information ---
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = 'CMEPDA project - Transformer Jet Tagging'
-copyright = '2026, Luca Nasini'
-author = 'Luca Nasini'
+project = __package_name__
+author = _metadata["Author-email"]
+copyright = f"2025-%Y, {author}"
+version = __version__
+release = version
 
-# -- General configuration ---------------------------------------------------
+
+# --- General configuration ---
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
 extensions = [
-    'sphinx.ext.autodoc',
-    'sphinx.ext.napoleon',
-    'sphinx.ext.viewcode',
+    "sphinx.ext.autodoc",
+    "sphinx.ext.todo",
+    "sphinx.ext.viewcode",
 ]
+autodoc_default_options = {
+    "members": True,
+    "member-order": "bysource",
+    "undoc-members": True,
+    "private-members": True
+}
+todo_include_todos = True
 
-templates_path = ['_templates']
-exclude_patterns = []
+# Options for syntax highlighting.
+pygments_style = "default"
+pygments_dark_style = "default"
 
-autodoc_mock_imports = ["torch", "numpy"]
-autodoc_member_order = 'bysource'
+# Options for internationalization.
+language = "en"
+
+# Options for markup.
+rst_prolog = f"""
+.. |Python| replace:: `Python <https://www.python.org/>`__
+.. |Sphinx| replace:: `Sphinx <https://www.sphinx-doc.org/en/master/>`__
+.. |numpy| replace:: `NumPy <https://numpy.org/>`__
+.. |GitHub| replace:: `GitHub <https://github.com/>`__
+"""
+
+# Options for source files.
+exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
+
+# Options for templating.
+templates_path = ["_templates"]
 
 
-# -- Options for HTML output -------------------------------------------------
+# --- Options for HTML output ---
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-html_theme = 'sphinx_rtd_theme'
-html_static_path = ['_static']
-
-import os
-import sys
-sys.path.insert(0, os.path.abspath('../src'))
+html_theme = "sphinx_rtd_theme"
+html_theme_options = {}
+html_permalinks_icon = "<span>#</span>"
+html_static_path = ["_static"]

@@ -25,7 +25,7 @@ matplotlib.use("Agg")               # non-interactive backend (no display needed
 import matplotlib.pyplot as plt
 import mplhep as hep
 
-from src.transformer_jet_tagging.constants import FLAVOUR_LABELS, FLAVOUR_COLORS
+from .constants import FLAVOUR_LABELS, FLAVOUR_COLORS
 
 hep.style.use(hep.style.ATLAS)
 logger = logging.getLogger("GN2.plotting")
@@ -42,16 +42,16 @@ def _load_jet_data(
     Load jet-level variables and labels from HDF5 for a subset of jets.
 
     Args:
-        file_path       (str):          Path to HDF5 file.
-        indices         (np.ndarray):   Sorted jet indices to read.
-        jet_vars        (list):         Jet variable names.
-        jet_flavour     (str):          Name of the flavour field in HDF5.
-        jet_flavour_map (dict):         Raw label → class index mapping.
+        file_path (str): Path to HDF5 file.
+        indices (np.ndarray): Sorted jet indices to read.
+        jet_vars (list): Jet variable names.
+        jet_flavour (str): Name of the flavour field in HDF5.
+        jet_flavour_map (dict): Raw label - class index mapping.
 
     Returns:
         dict:
             var_name (np.ndarray): shape (n_jets,) for each jet variable.
-            "label"  (np.ndarray): shape (n_jets,) integer class index for each jet.
+            "label" (np.ndarray): shape (n_jets,) integer class index for each jet.
     """
     sorted_idx = np.sort(indices)
     data: Dict[str, np.ndarray] = {}
@@ -78,12 +78,12 @@ def _load_track_data(
     Load valid track-level variables from HDF5, flattened across jets.
 
     Args:
-        file_path       (str):   Path to HDF5 file.
-        indices         (np.ndarray): Sorted jet indices.
-        track_vars      (list):  Track variable names.
-        jet_flavour     (str):   Flavour field name.
-        jet_flavour_map (dict):  Raw label → class index.
-        max_jets        (int):   Cap on jets to read (memory guard).
+        file_path (str): Path to HDF5 file.
+        indices (np.ndarray): Sorted jet indices.
+        track_vars (list): Track variable names.
+        jet_flavour (str): Flavour field name.
+        jet_flavour_map (dict): Raw label - class index.
+        max_jets (int): Cap on jets to read (memory guard).
 
     Returns:
         dict:
@@ -177,7 +177,7 @@ def plot_jet_variables(
                 ax=ax,
                 data=True,
                 loc=1,
-                rlabel='$\sqrt{s}=$'+str(13.6)+r' TeV, $t\bar{t}$ simulation'
+                rlabel=r'$\sqrt{s}=$'+str(13.6)+r' TeV, $t\bar{t}$ simulation'
                )
 
     # hide unused axes
@@ -245,7 +245,7 @@ def plot_track_variables(
                 ax=ax,
                 data=True,
                 loc=1,
-                rlabel='$\sqrt{s}=$'+str(13.6)+r' TeV, $t\bar{t}$ simulation'
+                rlabel=r'$\sqrt{s}=$'+str(13.6)+r' TeV, $t\bar{t}$ simulation'
                )
 
         for ax in axes[len(page_vars):]:
@@ -350,14 +350,14 @@ def make_all_plots(
     Generate all plots and save them to output_dir.
 
     Args:
-        file_path       (str):          Path to HDF5 file.
-        jet_vars        (list):         Jet variable names.
-        track_vars      (list):         Track variable names.
-        jet_flavour     (str):          Flavour field name in HDF5.
-        jet_flavour_map (dict):         Raw label → class index.
-        indices         (np.ndarray):   Jet indices to use (e.g. train_indices).
-        output_dir      (str):          Directory for output PNGs.
-        n_jets_track    (int):          Max jets for track plots (memory guard).
+        file_path (str): Path to HDF5 file.
+        jet_vars (list): Jet variable names.
+        track_vars (list): Track variable names.
+        jet_flavour (str): Flavour field name in HDF5.
+        jet_flavour_map (dict): Raw label - class index.
+        indices (np.ndarray): Jet indices to use (e.g. train_indices).
+        output_dir (str): Directory for output PNGs.
+        n_jets_track (int): Max jets for track plots (memory guard).
     """
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
@@ -386,7 +386,7 @@ def make_all_plots(
 if __name__ == "__main__":
     import argparse
     import sys
-    import src.transformer_jet_tagging.utils as utils
+    from . import utils
 
     logging.basicConfig(
         level=logging.INFO,
