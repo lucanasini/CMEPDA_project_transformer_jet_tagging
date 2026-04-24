@@ -15,6 +15,13 @@ authors = [
   ]
 dependencies = [
   "numpy",
+  "h5py",
+  "matplotlib",
+  "torch",
+  "scikit-learn",
+  "mplhep",
+  "tensorboard",
+  "tqdm",
   ]
 
 
