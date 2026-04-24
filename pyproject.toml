@@ -24,6 +24,9 @@ dev = [
     "ruff",
     "pylint",
   ]
+tests = [
+    "pytest",
+]
 docs = [
     "sphinx",
     "sphinx-rtd-theme",
