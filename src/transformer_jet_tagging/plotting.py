@@ -19,8 +19,8 @@ from pathlib import Path
 import h5py
 import matplotlib
 import matplotlib.pyplot as plt
-import numpy as np
 import mplhep as hep
+import numpy as np
 
 from .constants import FLAVOUR_COLORS, FLAVOUR_LABELS
 

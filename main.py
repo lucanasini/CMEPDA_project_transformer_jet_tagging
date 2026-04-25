@@ -12,7 +12,7 @@ from pathlib import Path
 import numpy as np
 import torch
 from src.transformer_jet_tagging import utils
-from src.transformer_jet_tagging.dataset import gn2_dataloader, GN2Dataset
+from src.transformer_jet_tagging.dataset import GN2Dataset, gn2_dataloader
 from src.transformer_jet_tagging.model import GN2
 from src.transformer_jet_tagging.train import train
 
