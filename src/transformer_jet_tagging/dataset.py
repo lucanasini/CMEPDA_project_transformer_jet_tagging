@@ -159,16 +159,14 @@ class GN2Dataset(Dataset):
         Raises:
             OSError: if the file cannot be opened.
         """
-        if self._handler is None:
-            with self._handler_lock:
-                # double-checked locking: re-test after acquiring the lock
-                if self._handler is None:
-                    try:
-                        # Single Writer Multiple Reader: allows multiple readers (num_workers > 0)
-                        self._handler = h5py.File(self.h5_file_path, "r", swmr=True)
-                    except OSError:
-                        logger.warning("SWMR mode not supported on this filesystem. Standard read.")
-                        self._handler = h5py.File(self.h5_file_path, "r")
+        with self._handler_lock:
+            if self._handler is None:
+                try:
+                    # Single Writer Multiple Reader: allows multiple readers (num_workers > 0)
+                    self._handler = h5py.File(self.h5_file_path, "r", swmr=True)
+                except OSError:
+                    logger.warning("SWMR mode not supported. Standard read.")
+                    self._handler = h5py.File(self.h5_file_path, "r")
         return self._handler
 
     def _process_jet(self, jet_pt: np.ndarray, jet_eta: np.ndarray) -> np.ndarray:
@@ -272,7 +270,7 @@ class GN2Dataset(Dataset):
                 "mask" (torch.Tensor, shape (max_tracks,))
                 "label" (torch.Tensor, scalar long)
         """
-        h5_handle  = self._get_handler()
+        h5_handle = self._get_handler()
         real_idx = self.jet_indices[idx]    # maps dataset index to the actual jet index in the file
 
         # 1. jet features
@@ -403,7 +401,7 @@ class _BatchCollator:
 
         n_batch_jets = len(real_idx)
         n_track_vars = len(dataset.track_vars)
-        max_tracks     = dataset.max_tracks
+        max_tracks   = dataset.max_tracks
 
         # 1. single batched HDF5 read
         jets_raw   = h5_handle["jets"][real_idx]
@@ -445,14 +443,12 @@ class _BatchCollator:
                 pad_width = max_tracks - raw_block.shape[1]
                 raw_block = np.pad(raw_block, ((0, 0), (0, pad_width)))
 
-            track_batch[:, :, i] = raw_block
-
             if has_norm:
                 raw_block = (raw_block - track_mu[i]) / track_sigma[i]
 
             # zero out padding positions
             raw_block[~valid_matrix] = 0.
-            track_batch[:, :, i]     = raw_block
+            track_batch[:, :, i] = raw_block
 
         # 4. labels
         raw_labels  = jets_raw[dataset.jet_flavour].astype(int)
@@ -572,15 +568,15 @@ if __name__ == "__main__":
 
     train_dataset = GN2Dataset(
         file_path,
-        jet_indices=train_indices,
-        max_tracks=n_tracks,
-        stats=norm_stats
+        jet_indices = train_indices,
+        max_tracks  = n_tracks,
+        stats       = norm_stats,
     )
     test_dataset = GN2Dataset(
         file_path,
-        jet_indices=test_indices,
-        max_tracks=n_tracks,
-        stats=norm_stats
+        jet_indices = test_indices,
+        max_tracks  = n_tracks,
+        stats       = norm_stats,
     )
 
     # shape check (single item)

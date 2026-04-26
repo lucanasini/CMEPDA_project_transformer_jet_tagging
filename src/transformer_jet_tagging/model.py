@@ -83,7 +83,7 @@ class TransformerLayer(nn.Module):
         n_heads: int,
         dim_ff: int,
         dropout: float = 0.0,
-        activation: str = "relu"
+        activation: str = "relu",
     ):
         """
         Initialize the transformer layer.
@@ -99,25 +99,25 @@ class TransformerLayer(nn.Module):
         super().__init__()
         self.dim_emb = dim_emb
         self.n_heads = n_heads
-        self.norm1 = nn.LayerNorm(dim_emb)      # normalization before attention
-        self.attn  = nn.MultiheadAttention(
+        self.norm1   = nn.LayerNorm(dim_emb)      # normalization before attention
+        self.attn    = nn.MultiheadAttention(
             dim_emb,
             n_heads,
             dropout=dropout,
-            batch_first=True                    # note: batch_first=True for (B, T, d_model) input
+            batch_first=True,                     # note: batch_first=True for (B, T, d_model) input
         )
-        self.norm2 = nn.LayerNorm(dim_emb)      # normalization before feed-forward
-        self.ff    = nn.Sequential(
+        self.norm2   = nn.LayerNorm(dim_emb)      # normalization before feed-forward
+        self.ff      = nn.Sequential(
             nn.Linear(dim_emb, dim_ff),
             _get_activation(activation),
             nn.Linear(dim_ff, dim_emb),
         )
-        self.drop  = nn.Dropout(dropout)
+        self.drop    = nn.Dropout(dropout)
 
     def forward(
         self,
         inputs: torch.Tensor,
-        key_padding_mask: torch.Tensor | None = None
+        key_padding_mask: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """
         Forward pass through the transformer layer.
@@ -132,10 +132,11 @@ class TransformerLayer(nn.Module):
         # self-attention with pre-norm
         residual = inputs           # save inputs for skip connection
         x = self.norm1(inputs)
-        # evita che jet con zero tracce valide producano nan nell'attention
+        # avoid all False mask which causes attn to return nan; if all positions are masked
         safe_mask = key_padding_mask.clone()
-        all_empty = ~key_padding_mask.any(dim=-1)   # (B,) jets senza tracce
-        safe_mask[all_empty, 0] = True              # forza almeno una posizione "valida"
+        all_empty = ~key_padding_mask.any(dim=-1)   # (B,) True if all positions are masked
+        # unmask the first position for batches where all are masked
+        safe_mask[all_empty, 0] = True
         x, _ = self.attn(x, x, x, key_padding_mask=~safe_mask)
         x = self.drop(x) + residual
 
@@ -189,11 +190,12 @@ class AttentionPooling(nn.Module):
         if padding_mask is not None:
             # mask padded positions to -inf so that softmax gives zero weight to ignored tracks
             scores = scores.masked_fill(~padding_mask, float('-inf'))
-        # se un jet ha tutte le tracce mascherate, softmax dà nan → fallback a uniform
-        all_masked = (~padding_mask).all(dim=-1, keepdim=True)  # (B, 1)
-        scores = scores.masked_fill(all_masked.expand_as(scores), 0.0)  # uniform fallback
-        weights = torch.softmax(scores, dim=-1)
-        pooled  = (weights.unsqueeze(-1) * x).sum(dim=1)    # (B, d_in)
+        # handle case where all tracks are masked (e.g. no tracks) to avoid nan in softmax
+        # (if all masked, set scores to zero)
+        all_masked = (~padding_mask).all(dim=-1, keepdim=True)          # (B, 1)
+        scores     = scores.masked_fill(all_masked.expand_as(scores), 0.0)  # uniform fallback
+        weights    = torch.softmax(scores, dim=-1)
+        pooled     = (weights.unsqueeze(-1) * x).sum(dim=1)                # (B, d_in)
         return pooled
 
 
@@ -201,7 +203,7 @@ def _mlp(
         in_dim: int,
         hidden_dims: list[int],
         out_dim: int,
-        activation: str = "relu"
+        activation: str = "relu",
 ) -> nn.Sequential:
     """
     Build an MLP with ReLU activations.
@@ -252,19 +254,19 @@ class GN2(nn.Module):
 
     def __init__(
         self,
-        n_jet_vars       : int,
-        n_track_vars     : int,
-        n_classes        : int  = 4,
-        init_hidden_dim  : int  = 256,
-        init_output_dim  : int  = 256,
-        embed_dim        : int  = 256,
-        n_heads          : int  = 8,
-        n_layers         : int  = 4,
-        ff_dim           : int  = 512,
-        pool_dim         : int  = 128,
-        dropout          : float = 0.0,
-        head_hidden_dims : list[int] | None = None,
-        activation       : str = "relu"
+        n_jet_vars: int,
+        n_track_vars: int,
+        n_classes: int = 4,
+        init_hidden_dim: int = 256,
+        init_output_dim: int = 256,
+        embed_dim: int = 256,
+        n_heads: int = 8,
+        n_layers: int = 4,
+        ff_dim: int = 512,
+        pool_dim: int = 128,
+        dropout: float = 0.0,
+        head_hidden_dims: list[int] | None = None,
+        activation: str = "relu",
     ):
         """
         Initialize the GN2 model.
@@ -295,7 +297,9 @@ class GN2(nn.Module):
         self.n_classes        = n_classes
         self.embed_dim        = embed_dim
         self.pool_dim         = pool_dim
-        self.head_hidden_dims = head_hidden_dims if head_hidden_dims is not None else [128, 64, 32]
+        self.head_hidden_dims = (
+            list(head_hidden_dims) if head_hidden_dims is not None else [128, 64, 32]
+        )
 
         in_dim = n_jet_vars + n_track_vars   # combined per-track input
 
@@ -317,7 +321,7 @@ class GN2(nn.Module):
                 n_heads,
                 ff_dim,
                 dropout,
-                activation
+                activation,
             ) for _ in range(n_layers)
         ])
         self.final_norm = nn.LayerNorm(embed_dim)   # post-encoder norm
@@ -336,11 +340,66 @@ class GN2(nn.Module):
         logger.info("GN2 initialised - embed=%s, layers=%s, heads=%s, ff=%s  |  params: %s",
                     embed_dim, n_layers, n_heads, ff_dim, f"{n_params:,}")
 
+    @classmethod
+    def from_checkpoint(
+        cls,
+        checkpoint_path: str,
+        device: torch.device,
+    ) -> "GN2":
+        """
+        Load a GN2 model from a checkpoint file.
+
+        Args:
+            checkpoint_path (str): path to the checkpoint file.
+            device (torch.device): device to load the model on.
+
+        Returns:
+            model (GN2): GN2 model loaded with the checkpoint weights.
+        
+        Raises:
+            OSError: if loading the checkpoint fails.
+            KeyError: if expected keys are missing in the checkpoint.
+        """
+        checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=True)
+
+        config       = checkpoint["config"]
+        model_config = config.get("model", {})
+        data_config  = config.get("data", {})
+
+        label_map    = {int(k): v for k, v in data_config["label_map"].items()}
+
+        model = cls(
+            n_jet_vars       = len(data_config["jet_features"]),
+            n_track_vars     = len(data_config["track_features"]),
+            n_classes        = len(label_map),
+            init_hidden_dim  = model_config.get("initialiser_hidden_dim", 256),
+            init_output_dim  = model_config.get("initialiser_output_dim", 256),
+            embed_dim        = model_config.get("transformer_embed_dim", 256),
+            n_heads          = model_config.get("transformer_n_heads", 8),
+            n_layers         = model_config.get("transformer_n_layers", 4),
+            ff_dim           = model_config.get("transformer_ff_dim", 512),
+            pool_dim         = model_config.get("pooling_dim", 128),
+            dropout          = model_config.get("transformer_dropout", 0.0),
+            head_hidden_dims = model_config.get("head_hidden_dims", None),
+            activation       = model_config.get("activation", "relu"),
+        ).to(device)
+
+        model.load_state_dict(checkpoint["model_state"])
+        model.eval()
+
+        logger.info(
+            "GN2 caricato da %s (epoch %s, val_loss=%.4f)",
+            checkpoint_path,
+            checkpoint.get("epoch", "?"),
+            checkpoint.get("val_loss", float("nan")),
+        )
+        return model
+
     def forward(
         self,
-        jet_features   : torch.Tensor,
-        track_features : torch.Tensor,
-        mask           : torch.Tensor,
+        jet_features: torch.Tensor,
+        track_features: torch.Tensor,
+        mask: torch.Tensor,
     ) -> dict[str, torch.Tensor]:
         """
         Forward pass through the GN2 model.
@@ -388,9 +447,9 @@ class GN2(nn.Module):
     @torch.no_grad()        # for inference
     def predict_proba(
         self,
-        jet_features  : torch.Tensor,
+        jet_features: torch.Tensor,
         track_features: torch.Tensor,
-        mask          : torch.Tensor,
+        mask: torch.Tensor,
     ) -> torch.Tensor:
         """
         Predict class probabilities for the jet classification head.
@@ -410,12 +469,12 @@ class GN2(nn.Module):
     @torch.no_grad()
     def discriminant_db(
         self,
-        jet_features  : torch.Tensor,
+        jet_features: torch.Tensor,
         track_features: torch.Tensor,
-        mask          : torch.Tensor,
-        fc            : float = 0.2,
-        ftau          : float = 0.05,
-        label_map     : dict[str, int] = None,
+        mask: torch.Tensor,
+        fc: float = 0.2,
+        ftau: float = 0.05,
+        label_map: dict[str, int] = None,
     ) -> torch.Tensor:
         """
         Compute the b-tagging discriminant D_b:
@@ -436,22 +495,22 @@ class GN2(nn.Module):
         if not all(k in label_map for k in ["b-jet", "c-jet", "light-jet", "tau-jet"]):
             raise ValueError("label_map must contain: ['b-jet', 'c-jet', 'light-jet', 'tau-jet']")
         proba = self.predict_proba(jet_features, track_features, mask)
-        pb   = proba[:, label_map["b-jet"]]
-        pc   = proba[:, label_map["c-jet"]]
-        pu   = proba[:, label_map["light-jet"]]
-        ptau = proba[:, label_map["tau-jet"]]
+        pb    = proba[:, label_map["b-jet"]]
+        pc    = proba[:, label_map["c-jet"]]
+        pu    = proba[:, label_map["light-jet"]]
+        ptau  = proba[:, label_map["tau-jet"]]
         denom = fc * pc + ftau * ptau + (1 - fc - ftau) * pu
         return torch.log((pb / denom).clamp(min=1e-8))
 
     @torch.no_grad()
     def discriminant_dc(
         self,
-        jet_features  : torch.Tensor,
+        jet_features: torch.Tensor,
         track_features: torch.Tensor,
-        mask          : torch.Tensor,
-        fb            : float = 0.3,
-        ftau          : float = 0.01,
-        label_map     : dict[str, int] = None,
+        mask: torch.Tensor,
+        fb: float = 0.3,
+        ftau: float = 0.01,
+        label_map: dict[str, int] = None,
     ) -> torch.Tensor:
         """
         Compute the c-tagging discriminant D_c:
@@ -472,9 +531,9 @@ class GN2(nn.Module):
         if not all(k in label_map for k in ["b-jet", "c-jet", "light-jet", "tau-jet"]):
             raise ValueError("label_map must contain: ['b-jet', 'c-jet', 'light-jet', 'tau-jet']")
         proba = self.predict_proba(jet_features, track_features, mask)
-        pb   = proba[:, label_map["b-jet"]]
-        pc   = proba[:, label_map["c-jet"]]
-        pu   = proba[:, label_map["light-jet"]]
-        ptau = proba[:, label_map["tau-jet"]]
+        pb    = proba[:, label_map["b-jet"]]
+        pc    = proba[:, label_map["c-jet"]]
+        pu    = proba[:, label_map["light-jet"]]
+        ptau  = proba[:, label_map["tau-jet"]]
         denom = fb * pb + ftau * ptau + (1 - fb - ftau) * pu
         return torch.log((pc / denom).clamp(min=1e-8))

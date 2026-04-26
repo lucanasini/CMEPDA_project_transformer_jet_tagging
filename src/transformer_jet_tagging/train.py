@@ -9,15 +9,20 @@ Provides:
   - run_epoch    : single epoch train/val loop
   - train        : full training loop, callable from main.py
 
-Outputs (under the directory specified in config["output"]["checkpoints_dir"]):
-  outputs/checkpoints/
-  ├── runs/
-  │   ├── events.out.tfevents.xxxx
-  │   └── …
-  └── best_model.pt
+Outputs:
+  Directory specified in ``config["output"]["checkpoints_dir"]``:
+
+  .. code-block:: text
+
+      outputs/checkpoints/
+      ├── runs/
+      │   ├── events.out.tfevents.xxxx
+      │   └── …
+      └── best_model.pt
 """
 
 import logging
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
@@ -56,11 +61,11 @@ class GN2Loss(nn.Module):
         Forward pass to compute the loss.
 
         Args:
-            outputs (dict): model outputs with keys:
-                "jet_outputs" (torch.Tensor, shape (batch_size, n_classes)):
-                    raw outputs for jet classification.
-            labels (dict): ground truth labels with keys:
-                "jet_label" (torch.Tensor, shape (batch_size,)): integer class labels for each jet.
+            outputs (dict): model outputs with keys "jet_outputs"
+                (torch.Tensor, shape (batch_size, n_classes)) with raw outputs for jet
+                    classification.
+            labels (dict): ground truth labels with keys "jet_label"
+                (torch.Tensor, shape (batch_size,)) with integer class labels for each jet.
         """
         loss_jet = self.ce_jet(outputs["jet_outputs"], labels["jet_label"])
 
@@ -113,19 +118,19 @@ def lr_scheduler(
         optimizer,
         start_factor = start_factor,
         end_factor   = end_factor,
-        total_iters  = n_warmup
+        total_iters  = n_warmup,
     )
 
     cosine = CosineAnnealingLR(
         optimizer,
         T_max   = n_total_steps - n_warmup,
-        eta_min = lr_final
+        eta_min = lr_final,
     )
 
     scheduler = SequentialLR(
         optimizer,
         schedulers = [warmup, cosine],
-        milestones = [n_warmup]
+        milestones = [n_warmup],
     )
 
     return scheduler
@@ -174,7 +179,7 @@ def run_epoch(
         for batch in loader:
             jet_vars   = batch["jet_features"].to(device)
             track_vars = batch["track_features"].to(device)
-            mask    = batch["mask"].to(device)
+            mask       = batch["mask"].to(device)
 
             labels = {"jet_label": batch["label"].to(device)}
 
@@ -208,6 +213,54 @@ def run_epoch(
     return {k: v / max(n_batches, 1) for k, v in totals.items()}
 
 
+@dataclass
+class TrainingHistory:
+    """
+    Class for storing training history (losses and learning rates) during training.
+    Useful for plotting learning curves after training.
+
+    Attributes:
+        train_loss (list[float]): list of training losses per epoch.
+        val_loss (list[float]): list of validation losses per epoch.
+        lr (list[float]): list of learning rates per epoch.
+    """
+    train_loss: list[float] = field(default_factory=list)
+    val_loss:   list[float] = field(default_factory=list)
+    lr:         list[float] = field(default_factory=list)
+
+    def append(
+        self,
+        train_loss: float,
+        val_loss: float,
+        lr: float,
+    ) -> None:
+        """
+        Append a new entry to the training history.
+
+        Args:
+            train_loss (float): training loss for the current epoch.
+            val_loss (float): validation loss for the current epoch.
+            lr (float): learning rate for the current epoch.
+        """
+        self.train_loss.append(train_loss)
+        self.val_loss.append(val_loss)
+        self.lr.append(lr)
+
+    def to_dict(self) -> dict[str, list[float]]:
+        """
+        Convert the training history to a dictionary format suitable for plotting.
+
+        Returns:
+            dict[str, list[float]]: dictionary with keys "train_loss", "val_loss", and "lr",
+                each containing a list of values per epoch.
+        """
+        return {
+            "train_loss": self.train_loss,
+            "val_loss":   self.val_loss,
+            "lr":         self.lr,
+        }
+
+
 # ---------------------------------------------------------------------------
 # Full training loop
 # ---------------------------------------------------------------------------
@@ -232,6 +285,9 @@ def train(
 
     Returns:
         model (GN2): GN2 model loaded with the best checkpoint weights.
+
+    Raises:
+        OSError: if saving the checkpoint fails.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -245,13 +301,13 @@ def train(
 
     n_epochs      = training_config.get("max_epochs", 20)
     n_total_steps = n_epochs * len(train_loader)
-    lr_decay  = lr_scheduler(                           # TODO: riveredere parametri del lr
+    lr_decay = lr_scheduler(                           # TODO: riveredere parametri del lr
         optimiser,
         n_total_steps,
         warmup_frac = training_config.get("warmup_frac", 0.01),
-        lr_initial = training_config.get("lr_initial", 1.0e-07),
-        lr_peak = lr,
-        lr_final = training_config.get("lr_final", 1.0e-05),
+        lr_initial  = training_config.get("lr_initial", 1.0e-07),
+        lr_peak     = lr,
+        lr_final    = training_config.get("lr_final", 1.0e-05),
     )
 
     scaler = torch.amp.GradScaler() if device.type == "cuda" else None
@@ -260,7 +316,7 @@ def train(
     best_val_loss   = float("inf")
     checkpoint_path = output_dir / "best_model.pt"
 
-    history = {"train_loss": [], "val_loss": [], "lr": []}
+    history = TrainingHistory()
     for epoch in range(1, n_epochs + 1):
 
         train_losses = run_epoch(model, train_loader, loss, optimiser,
@@ -270,9 +326,11 @@ def train(
 
         lr_now = lr_decay.get_last_lr()[0]
 
-        history["train_loss"].append(train_losses["total"])
-        history["val_loss"].append(val_losses["total"])
-        history["lr"].append(lr_now)
+        history.append(
+            train_loss = train_losses["total"],
+            val_loss   = val_losses["total"],
+            lr         = lr_now,
+        )
 
         logger.info("Epoch %s/%s | train loss=%s (jet=%s) | val=%s | lr=%s",
                     f"{epoch:4d}", n_epochs, f"{train_losses['total']:.4f}",
@@ -286,23 +344,24 @@ def train(
 
         if val_losses["total"] < best_val_loss:
             best_val_loss = val_losses["total"]
-            torch.save({
+            try:
+                torch.save({
                 "epoch"      : epoch,
                 "model_state": model.state_dict(),
                 "optim_state": optimiser.state_dict(),
                 "val_loss"   : best_val_loss,
                 "config"     : config,
-            }, checkpoint_path)
-            logger.info("    New best val_loss=%s - saved to %s",
-                        f"{best_val_loss:.4f}", checkpoint_path)
+                }, checkpoint_path)
+                logger.info("    New best val_loss=%s - saved to %s",
+                            f"{best_val_loss:.4f}", checkpoint_path)
+            except OSError as e:
+                logger.error("Failed to save checkpoint to %s: %s", checkpoint_path, e)
 
     writer.close()
     logger.info("Training complete.")
 
     # reload best weights before returning
-    model.load_state_dict(
-        torch.load(checkpoint_path, map_location=device, weights_only=True)["model_state"]
-    )
+    model = GN2.from_checkpoint(checkpoint_path, device)
 
     return model, history
 
@@ -329,7 +388,7 @@ if __name__ == "__main__":
     cfg = utils.load_config_json(args.config)
 
     preprocess_dir = Path(cfg["output"]["preprocess_dir"])
-    ckpt_dir     = Path(cfg["output"].get("checkpoints_dir", "outputs/checkpoints"))
+    ckpt_dir       = Path(cfg["output"].get("checkpoints_dir", "outputs/checkpoints"))
 
     cfg_jet_vars   = cfg["data"]["jet_features"]
     cfg_track_vars = cfg["data"]["track_features"]
@@ -343,8 +402,8 @@ if __name__ == "__main__":
 
     if not all(p.exists() for p in artifacts):
         logger.info("Preprocessing artifacts not found - running preprocess.py …")
-        from . import preprocess
-        preprocess.main(args.config)
+        from .preprocess import run_preprocess
+        run_preprocess(args.config)
 
     train_indices = np.load(idx_dir / "train_indices.npy")
     val_indices   = np.load(idx_dir / "val_indices.npy")
@@ -353,13 +412,13 @@ if __name__ == "__main__":
         rng = np.random.default_rng(seed=42)
         train_indices = rng.choice(
             train_indices,
-            size=int(len(train_indices) * args.debug_frac),
-            replace=False
+            size    = int(len(train_indices) * args.debug_frac),
+            replace = False,
         )
         val_indices = rng.choice(
             val_indices,
-            size=int(len(val_indices) * args.debug_frac),
-            replace=False
+            size    = int(len(val_indices) * args.debug_frac),
+            replace = False,
         )
         logger.info("Debug mode: %s of data - train=%s  val=%s",
                     f"{args.debug_frac:.0%}", f"{len(train_indices):,}", f"{len(val_indices):,}")
@@ -381,8 +440,8 @@ if __name__ == "__main__":
     )
 
     cfg_training = cfg.get("training", {})
-    batch_size      = cfg_training.get("batch_size", 1024)
-    num_workers     = cfg_training.get("num_workers", 0)
+    batch_size   = cfg_training.get("batch_size", 1024)
+    num_workers  = cfg_training.get("num_workers", 0)
 
     loader_kwargs = dict(
         batch_size  = batch_size,
@@ -422,5 +481,5 @@ if __name__ == "__main__":
         cfg_val_loader,
         cfg,
         ckpt_dir,
-        run_device
+        run_device,
     )

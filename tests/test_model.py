@@ -120,3 +120,16 @@ def test_discriminant_db_invalid_label_map(dummy_input):
 
     with pytest.raises(ValueError):
         model.discriminant_db(**dummy_input, label_map=bad_map)
+
+
+def test_discriminant_dc_invalid_label_map(dummy_input):
+
+    model = GN2(
+        n_jet_vars   = 3,
+        n_track_vars = 4
+    )
+
+    bad_map = {"b-jet": 0}
+
+    with pytest.raises(ValueError):
+        model.discriminant_dc(**dummy_input, label_map=bad_map)

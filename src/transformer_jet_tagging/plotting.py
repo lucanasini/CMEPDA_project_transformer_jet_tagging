@@ -53,18 +53,29 @@ def _load_jet_data(
         dict:
             var_name (np.ndarray): shape (n_jets,) for each jet variable.
             "label" (np.ndarray): shape (n_jets,) integer class index for each jet.
+
+    Raises:
+        FileNotFoundError: if the specified file does not exist.
+        KeyError: if expected datasets or fields are missing in the HDF5 file.
     """
     sorted_idx = np.sort(jet_indices)
     data: dict[str, np.ndarray] = {}
 
-    with h5py.File(h5_path, "r") as f:
-        jets = f["jets"][sorted_idx]
-        for var in jet_vars:
-            data[var] = jets[var].astype(np.float32)
-        raw_labels = jets[jet_flavour].astype(int)
-        data["label"] = np.array(
-            [jet_flavour_map.get(label, 0) for label in raw_labels], dtype=np.int32
-        )
+    try:
+        with h5py.File(h5_path, "r") as f:
+            jets = f["jets"][sorted_idx]
+            for var in jet_vars:
+                data[var] = jets[var].astype(np.float32)
+            raw_labels = jets[jet_flavour].astype(int)
+            data["label"] = np.array(
+                [jet_flavour_map.get(label, 0) for label in raw_labels], dtype=np.int32
+            )
+    except FileNotFoundError:
+        logger.error("HDF5 file not found: %s", h5_path)
+        raise
+    except KeyError as e:
+        logger.error("Missing dataset in HDF5 file: %s", e)
+        raise
 
     return data
 
@@ -92,32 +103,43 @@ def _load_track_data(
         dict:
             var_name (np.ndarray): shape (n_tracks,) for each track variable.
             "label" (np.ndarray): shape (n_tracks,) integer class index for each track's jet.
+        
+    Raises:
+        FileNotFoundError: if the specified file does not exist.
+        KeyError: if expected datasets or fields are missing in the HDF5 file.
     """
     sorted_idx = np.sort(jet_indices[:max_jets])
     data_lists: dict[str, list] = {v: [] for v in track_vars}
     data_lists["label"] = []
 
-    with h5py.File(h5_path, "r") as f:
-        jets_raw   = f["jets"][sorted_idx]
-        tracks_raw = f["tracks"][sorted_idx]
-        raw_labels = jets_raw[jet_flavour].astype(int)
-        labels     = np.array(
-            [jet_flavour_map.get(label, 0) for label in raw_labels], dtype=np.int32
-        )
+    try:
+        with h5py.File(h5_path, "r") as f:
+            jets_raw   = f["jets"][sorted_idx]
+            tracks_raw = f["tracks"][sorted_idx]
+            raw_labels = jets_raw[jet_flavour].astype(int)
+            labels     = np.array(
+                [jet_flavour_map.get(label, 0) for label in raw_labels], dtype=np.int32
+            )
 
-        has_valid = "valid" in tracks_raw.dtype.names
-        for i in range(len(sorted_idx)):
-            if has_valid:
-                valid_mask = tracks_raw["valid"][i].astype(bool)
-            else:
-                valid_mask = np.ones(tracks_raw.shape[1], dtype=bool)
+            has_valid = "valid" in tracks_raw.dtype.names
+            for i in range(len(sorted_idx)):
+                if has_valid:
+                    valid_mask = tracks_raw["valid"][i].astype(bool)
+                else:
+                    valid_mask = np.ones(tracks_raw.shape[1], dtype=bool)
 
-            n = valid_mask.sum()
-            if n == 0:
-                continue
-            for var in track_vars:
-                data_lists[var].append(tracks_raw[var][i][valid_mask].astype(np.float32))
-            data_lists["label"].append(np.full(n, labels[i], dtype=np.int32))
+                n = valid_mask.sum()
+                if n == 0:
+                    continue
+                for var in track_vars:
+                    data_lists[var].append(tracks_raw[var][i][valid_mask].astype(np.float32))
+                data_lists["label"].append(np.full(n, labels[i], dtype=np.int32))
+    except FileNotFoundError:
+        logger.error("HDF5 file not found: %s", h5_path)
+        raise
+    except KeyError as e:
+        logger.error("Missing dataset in HDF5 file: %s", e)
+        raise
 
     return {
         k: np.concatenate(v) if len(v) > 0 else np.array(
@@ -280,6 +302,55 @@ def plot_track_variables(
         logger.info("Saved: %s", out)
 
 
+def _corr_matrix(data_dict, vars_list):
+    """
+    Compute correlation matrix for the specified variables.
+    (Non-finite values are replaced with the column mean before correlation)
+
+    Args:
+        data_dict (dict): dict of variable name to np.ndarray.
+        vars_list (list): list of variable names to include in the matrix.
+    
+    Returns:
+        np.ndarray: shape (len(vars_list), len(vars_list)), correlation matrix.
+    """
+    mat = np.column_stack([data_dict[v].astype(np.float32) for v in vars_list])
+    # replace inf/nan with column mean
+    col_means = np.nanmean(mat, axis=0)
+    inds = np.where(~np.isfinite(mat))
+    mat[inds] = col_means[inds[1]]
+    return np.corrcoef(mat, rowvar=False)
+
+
+def _draw_heatmap(ax, corr, labels, title):
+    """
+    Draw a heatmap of the correlation matrix with annotations.
+
+    Args:
+        ax: matplotlib axis to draw on.
+        corr: 2D array of correlation coefficients.
+        labels: list of variable names for axes.
+        title: title of the plot.
+    
+    Returns:
+        im: image object from imshow (for colorbar).
+    """
+    im = ax.imshow(corr, vmin=-1, vmax=1, cmap="RdBu_r", aspect="auto")
+    ax.set_xticks(range(len(labels)))
+    ax.set_yticks(range(len(labels)))
+    ax.set_xticklabels(labels, rotation=45, ha="right", fontsize=8)
+    ax.set_yticklabels(labels, fontsize=8)
+    ax.set_title(title, fontsize=11)
+    # annotate cells
+    for i in range(len(labels)):
+        for j in range(len(labels)):
+            val = corr[i, j]
+            color = "white" if abs(val) > 0.6 else "black"
+            ax.text(j, i, f"{val:.2f}", ha="center", va="center",
+                    fontsize=6, color=color)
+    return im
+
+
 def plot_correlations(
     jet_data: dict[str, np.ndarray],
     track_data: dict[str, np.ndarray],
@@ -297,30 +368,6 @@ def plot_correlations(
         track_vars (list): Track variable names.
         output_dir (Path): Directory where PNGs are saved.
     """
-
-    def _corr_matrix(data_dict, vars_list):
-        mat = np.column_stack([data_dict[v].astype(np.float32) for v in vars_list])
-        # replace inf/nan with column mean
-        col_means = np.nanmean(mat, axis=0)
-        inds = np.where(~np.isfinite(mat))
-        mat[inds] = col_means[inds[1]]
-        return np.corrcoef(mat, rowvar=False)
-
-    def _draw_heatmap(ax, corr, labels, title):
-        im = ax.imshow(corr, vmin=-1, vmax=1, cmap="RdBu_r", aspect="auto")
-        ax.set_xticks(range(len(labels)))
-        ax.set_yticks(range(len(labels)))
-        ax.set_xticklabels(labels, rotation=45, ha="right", fontsize=8)
-        ax.set_yticklabels(labels, fontsize=8)
-        ax.set_title(title, fontsize=11)
-        # annotate cells
-        for i in range(len(labels)):
-            for j in range(len(labels)):
-                val = corr[i, j]
-                color = "white" if abs(val) > 0.6 else "black"
-                ax.text(j, i, f"{val:.2f}", ha="center", va="center",
-                        fontsize=6, color=color)
-        return im
 
     # jet correlation
     if len(jet_vars) >= 2:

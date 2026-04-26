@@ -1,8 +1,8 @@
-'''
+"""
 main.py
 =======
 Main script for the transformer jet tagging project.
-'''
+"""
 
 import argparse
 import json
@@ -35,11 +35,11 @@ if __name__ == "__main__":
         "--debug-frac",
         type=float,
         default=1.0,
-        help="Fraction of data to use (es. 0.05 per il 5%%)"
+        help="Fraction of data to use (es. 0.05 per il 5%%)",
     )
-    args = parser.parse_args()
+    args        = parser.parse_args()
     config_path = Path(args.config)
-    debug_frac = args.debug_frac
+    debug_frac  = args.debug_frac
     # load configuration
     config = utils.load_config_json(config_path)
 
@@ -68,8 +68,10 @@ if __name__ == "__main__":
 
     if not all(p.exists() for p in artifacts_dir):
         logger.info("Preprocessing files not found. Running preprocess script ...")
-        from src.transformer_jet_tagging import preprocess
-        preprocess.main(config_path=config_path)
+
+        from src.transformer_jet_tagging.preprocess import run_preprocess
+
+        run_preprocess(config_path=config_path)
 
     for path in artifacts_dir:
         if not path.exists():
@@ -86,17 +88,17 @@ if __name__ == "__main__":
         train_indices = rng.choice(
             train_indices,
             size=int(len(train_indices) * debug_frac),
-            replace=False
+            replace=False,
         )
         val_indices   = rng.choice(
             val_indices,
             size=int(len(val_indices) * debug_frac),
-            replace=False
+            replace=False,
         )
         test_indices  = rng.choice(
             test_indices,
             size=int(len(test_indices) * debug_frac),
-            replace=False
+            replace=False,
         )
 
         logger.info("Debug mode: %s dei dati", f"{debug_frac:.1%}")
@@ -185,7 +187,7 @@ if __name__ == "__main__":
         val_loader   = val_loader,
         config       = config,
         output_dir   = Path(config["output"].get("checkpoints_dir", "outputs/checkpoints")),
-        device       = device
+        device       = device,
     )
 
     if config["output"].get("plot_roc", False):
@@ -197,7 +199,7 @@ if __name__ == "__main__":
         )
 
         plot_learning_curves(
-            history,
+            history.to_dict(),
             output_dir = Path(config["output"]["plots_dir"]),
         )
 

@@ -70,6 +70,26 @@ def test_process_jet_no_norm():
     assert np.isfinite(out).all()
 
 
+def test_process_tracks_no_norm():
+
+    ds            = GN2Dataset.__new__(GN2Dataset)
+    ds.stats      = None
+    ds.max_tracks = 4
+    ds.track_vars = ["x", "y"]
+
+    tracks_raw = np.array(
+        [(10., 2., True), (15., 3., True), (20., 4., True)],
+        dtype=[("x", np.float32), ("y", np.float32), ("valid", bool)],
+    )
+
+    out, mask = ds._process_tracks(tracks_raw)
+
+    assert out.shape  == (4, 2)
+    assert mask.shape == (4,)
+    assert mask[:3].all()
+    assert np.isfinite(out[:3]).all()
+
+
 def test_process_tracks_padding_mask():
 
     ds = GN2Dataset.__new__(GN2Dataset)

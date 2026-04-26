@@ -10,13 +10,17 @@ Run this script ONCE before training. It will:
   4. Compute normalization statistics (mu, sigma) on the training set only.
   5. Save indices and norm stats to disk.
 
-Outputs (under the directory specified in config["output"]["preprocess_dir"]):
-  preprocess_dir/
-  ├── indices/
-  │   ├── train_indices.npy
-  │   ├── val_indices.npy
-  │   └── test_indices.npy
-  └── norm_stats.json
+Outputs:
+  Directory specified in ``config["output"]["preprocess_dir"]``:
+
+  .. code-block:: text
+
+      preprocess_dir/
+      ├── indices/
+      │   ├── train_indices.npy
+      │   ├── val_indices.npy
+      │   └── test_indices.npy
+      └── norm_stats.json
 """
 
 import json
@@ -60,9 +64,7 @@ def save_norm_stats(output_dir: Path, norm_stats: dict) -> None:
     logger.info("Normalization stats saved to %s", out_path)
 
 
-
-
-def main(config_path: str):
+def run_preprocess(config_path: str):
 
     # 1. load configuration
     config = utils.load_config_json(config_path)
@@ -85,9 +87,16 @@ def main(config_path: str):
 
     # 2. kinematic selection
     logger.info("Reading kinematics from %s ...", {file_path})
-    with h5py.File(file_path, "r") as f:
-        pt  = f["jets"]["pt"][:]
-        eta = f["jets"]["eta"][:]
+    try:
+        with h5py.File(file_path, "r") as f:
+            pt  = f["jets"]["pt"][:]
+            eta = f["jets"]["eta"][:]
+    except FileNotFoundError:
+        logger.error("HDF5 file not found: %s", file_path)
+        raise
+    except KeyError as e:
+        logger.error("Expected dataset not found in HDF5: %s", e)
+        raise
 
     kinematic_mask = (pt > pt_min) & (pt < pt_max) & (np.abs(eta) < eta_max)
     valid_indices  = np.where(kinematic_mask)[0]
@@ -145,4 +154,4 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     cfg_path = args.config
-    main(cfg_path)
+    run_preprocess(cfg_path)

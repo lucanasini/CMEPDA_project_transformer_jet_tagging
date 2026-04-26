@@ -21,7 +21,7 @@ def compute_normalization_stats(
     train_indices: np.ndarray,
     jet_vars: list[str] | None = None,
     track_vars: list[str] | None = None,
-    batch_size: int | None = 10_000
+    batch_size: int | None = 10_000,
 ):
     """
     Compute mean and std normalization statistics on the training set only.
@@ -95,7 +95,7 @@ def compute_normalization_stats(
             for i, jvar in enumerate(jet_vars):
                 jet_col = jets_raw[jvar].astype(np.float32)
                 if jvar == 'pt':
-                    eps     = 1e-8
+                    eps = 1e-8
                     jet_col = np.log(np.clip(jet_col, eps, None))
                 jet_batch[:, i] = jet_col
             jet_scaler.partial_fit(jet_batch)
@@ -141,7 +141,17 @@ def load_config_json(filepath):
 
     Returns:
         dict: configuration parameters loaded from the JSON file.
+
+    Raises:
+        FileNotFoundError: if the specified file does not exist.
+        json.JSONDecodeError: if the file is not a valid JSON.
     """
-    with open(filepath, encoding="utf-8") as f:
-        config = json.load(f)
-    return config
+    try:
+        with open(filepath, encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        logger.error("Config file not found: %s", filepath)
+        raise
+    except json.JSONDecodeError as e:
+        logger.error("Invalid JSON in config file %s: %s", filepath, e)
+        raise
