@@ -1,18 +1,13 @@
 # GN2 Jet Flavour Tagger
 
-![License](https://img.shields.io/github/license/USER/REPO)
+![License](https://img.shields.io/github/license/lucanasini/CMEPDA_project_transformer_jet_tagging)
 [![CI](https://github.com/lucanasini/CMEPDA_project_transformer_jet_tagging/actions/workflows/ci.yml/badge.svg)](https://github.com/lucanasini/CMEPDA_project_transformer_jet_tagging/actions/workflows/ci.yml)
-[![Docs](https://github.com/lucanasini/CMEPDA_project_transformer_jet_tagging/actions/workflows/docs.yml/badge.svg)](https://github.com/CMEPDA_project_transformer_jet_tagging/actions/workflows/docs.yml)
+[![Docs](https://github.com/lucanasini/CMEPDA_project_transformer_jet_tagging/actions/workflows/docs.yml/badge.svg)](https://github.com/lucanasini/CMEPDA_project_transformer_jet_tagging/actions/workflows/docs.yml)
 [![Docs](https://img.shields.io/badge/docs-latest-blue.svg)](https://lucanasini.github.io/CMEPDA_project_transformer_jet_tagging/)
 
-![pytorch](https://img.shields.io/badge/PyTorch-EE4C2C?logo=pytorch)
-![model](https://img.shields.io/badge/model-transformer-orange)
-![cuda](https://img.shields.io/badge/CUDA-11.8-green)
-![cuda](https://img.shields.io/badge/CUDA-12.1-green)
-![CI](https://img.shields.io/github/actions/workflow/status/USER/REPO/workflow.yml)
-![coverage](https://img.shields.io/codecov/c/github/USER/REPO)
-![PyPI](https://img.shields.io/pypi/v/packagename)
-![Python](https://img.shields.io/pypi/pyversions/packagename)
+![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C?logo=pytorch)
+![Model](https://img.shields.io/badge/model-transformer-orange)
+![CUDA](https://img.shields.io/badge/CUDA-11.8%20%7C%2012.1-green)
 
 Implementation of the GN2 tagger described in:
 > *"Transforming jet flavour tagging at ATLAS"*, Nature Communications (2026) 17:541
