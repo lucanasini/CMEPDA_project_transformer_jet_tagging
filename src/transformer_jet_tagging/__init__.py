@@ -1,3 +1,9 @@
+"""
+__init__.py
+================
+Initialization module for the transformer_jet_tagging package.
+"""
+
 import pathlib
 import subprocess
 

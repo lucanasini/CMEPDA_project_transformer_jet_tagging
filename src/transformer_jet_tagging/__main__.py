@@ -1,7 +1,7 @@
 """
-main.py
-=======
-Main script for the transformer jet tagging project.
+__main__.py
+===========
+Entry point for the transformer_jet_tagging package.
 """
 
 import argparse
@@ -11,39 +11,54 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from src.transformer_jet_tagging import utils
-from src.transformer_jet_tagging.dataset import GN2Dataset, gn2_dataloader
-from src.transformer_jet_tagging.model import GN2
-from src.transformer_jet_tagging.train import train
+
+from transformer_jet_tagging import __version__, utils
+from transformer_jet_tagging.dataset import GN2Dataset, gn2_dataloader
+from transformer_jet_tagging.evaluate import evaluate
+from transformer_jet_tagging.model import GN2
+from transformer_jet_tagging.train import train
 
 logging.basicConfig(
-    level  = logging.DEBUG,
-    format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.DEBUG,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger("GN2")
 
-if __name__ == "__main__":
 
-    parser = argparse.ArgumentParser(description="GN2 preprocessing pipeline")
+def main():
+    parser = argparse.ArgumentParser(
+        prog="transformer_jet_tagging",
+        description="GN2 transformer jet tagging pipeline",
+    )
+
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=__version__,
+    )
+
     parser.add_argument(
         "--config",
         type=str,
         default="configs/config.json",
         help="Path to the JSON configuration file.",
     )
+
     parser.add_argument(
         "--debug-frac",
         type=float,
         default=1.0,
-        help="Fraction of data to use (es. 0.05 per il 5%%)",
+        help="Fraction of data to use",
     )
-    args        = parser.parse_args()
+
+    args = parser.parse_args()
+
     config_path = Path(args.config)
     debug_frac  = args.debug_frac
+
     # load configuration
     config = utils.load_config_json(config_path)
 
-    # extract configuration parameters
     file_path      = config["data"]["h5_path"]
     preprocess_dir = Path(config["output"]["preprocess_dir"])
 
@@ -55,53 +70,52 @@ if __name__ == "__main__":
     batch_size  = config["training"].get("batch_size", 1024)
     shuffle_var = config["data"].get("shuffle", False)
 
-    # 1. preprocessing
-    idx_dir   = preprocess_dir / "indices"
+    # preprocessing
+    idx_dir = preprocess_dir / "indices"
     norm_path = preprocess_dir / "norm_stats.json"
 
-    artifacts_dir = [
+    artifacts = [
         idx_dir / "train_indices.npy",
         idx_dir / "val_indices.npy",
         idx_dir / "test_indices.npy",
         norm_path,
     ]
 
-    if not all(p.exists() for p in artifacts_dir):
-        logger.info("Preprocessing files not found. Running preprocess script ...")
+    if not all(p.exists() for p in artifacts):
+        logger.info("Preprocessing not found: running preprocess")
 
-        from src.transformer_jet_tagging.preprocess import run_preprocess
+        from transformer_jet_tagging.preprocess import run_preprocess
 
         run_preprocess(config_path=config_path)
 
-    for path in artifacts_dir:
+    for path in artifacts:
         if not path.exists():
-            raise FileNotFoundError(
-                f"Preprocessing artifact not found: {path}\nRun preprocess.py first."
-            )
+            raise FileNotFoundError(f"Missing preprocessing artifact: {path}")
 
-    train_indices = np.load(artifacts_dir[0])
-    val_indices   = np.load(artifacts_dir[1])
-    test_indices  = np.load(artifacts_dir[2])
+    train_indices = np.load(artifacts[0])
+    val_indices   = np.load(artifacts[1])
+    test_indices  = np.load(artifacts[2])
 
     if debug_frac < 1.0:
         rng = np.random.default_rng(seed=42)
+
         train_indices = rng.choice(
             train_indices,
             size=int(len(train_indices) * debug_frac),
             replace=False,
         )
-        val_indices   = rng.choice(
+        val_indices = rng.choice(
             val_indices,
             size=int(len(val_indices) * debug_frac),
             replace=False,
         )
-        test_indices  = rng.choice(
+        test_indices = rng.choice(
             test_indices,
             size=int(len(test_indices) * debug_frac),
             replace=False,
         )
 
-        logger.info("Debug mode: %s dei dati", f"{debug_frac:.1%}")
+        logger.info("Debug mode: %s", f"{debug_frac:.1%}")
 
     train_indices = np.sort(train_indices)
     val_indices   = np.sort(val_indices)
@@ -117,7 +131,7 @@ if __name__ == "__main__":
         f"{len(test_indices):,}",
     )
 
-    # 2. initialize datasets and dataloaders
+    # datasets and dataloaders
     common_kwargs = dict(
         h5_file_path    = file_path,
         max_tracks      = config["data"].get("max_tracks", 40),
@@ -127,6 +141,7 @@ if __name__ == "__main__":
         jet_flavour_map = label_map,
         stats           = norm_stats,
     )
+
     loader_kwargs = dict(
         batch_size  = batch_size,
         num_workers = config["training"].get("num_workers", 0),
@@ -142,13 +157,7 @@ if __name__ == "__main__":
     val_loader   = gn2_dataloader(val_dataset,   **loader_kwargs, shuffle=False)
     test_loader  = gn2_dataloader(test_dataset,  **loader_kwargs, shuffle=False)
 
-    batch = next(iter(train_loader))
-    logger.debug("Jets shape:   %s", batch['jet_features'].shape)
-    logger.debug("Tracks shape: %s", batch['track_features'].shape)
-    logger.debug("Labels shape: %s", batch['label'].shape)
-
     if config["output"].get("save_plots", False):
-
         from src.transformer_jet_tagging.plotting import make_all_plots
 
         make_all_plots(
@@ -162,25 +171,34 @@ if __name__ == "__main__":
             n_jets_track    = int(len(train_indices)*0.1),
         )
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # debug batch
+    batch = next(iter(train_loader))
+    logger.debug("Jets:   %s", batch["jet_features"].shape)
+    logger.debug("Tracks: %s", batch["track_features"].shape)
+    logger.debug("Labels: %s", batch["label"].shape)
+
+    # model
+    device = torch.device("cpu")
 
     model_config = config.get("model", {})
+
     gn2_model = GN2(
         n_jet_vars       = len(jet_vars),
         n_track_vars     = len(track_vars),
         n_classes        = len(label_map),
-        init_hidden_dim  = model_config.get("initialiser_hidden_dim", None),
-        init_output_dim  = model_config.get("initialiser_output_dim", None),
-        embed_dim        = model_config.get("transformer_embed_dim", None),
-        n_heads          = model_config.get("transformer_n_heads", None),
-        n_layers         = model_config.get("transformer_n_layers", None),
-        ff_dim           = model_config.get("transformer_ff_dim", None),
-        pool_dim         = model_config.get("pooling_dim", None),
-        dropout          = model_config.get("transformer_dropout", None),
-        head_hidden_dims = model_config.get("head_hidden_dims", None),
-        activation       = model_config.get("activation", None),
+        init_hidden_dim  = model_config.get("initialiser_hidden_dim"),
+        init_output_dim  = model_config.get("initialiser_output_dim"),
+        embed_dim        = model_config.get("transformer_embed_dim"),
+        n_heads          = model_config.get("transformer_n_heads"),
+        n_layers         = model_config.get("transformer_n_layers"),
+        ff_dim           = model_config.get("transformer_ff_dim"),
+        pool_dim         = model_config.get("pooling_dim"),
+        dropout          = model_config.get("transformer_dropout"),
+        head_hidden_dims = model_config.get("head_hidden_dims"),
+        activation       = model_config.get("activation"),
     ).to(device)
 
+    # training
     gn2_model, history = train(
         model        = gn2_model,
         train_loader = train_loader,
@@ -190,28 +208,31 @@ if __name__ == "__main__":
         device       = device,
     )
 
+    # plots
     if config["output"].get("plot_roc", False):
-
-        from src.transformer_jet_tagging.plotting import (
+        from transformer_jet_tagging.plotting import (
             plot_learning_curves,
             plot_roc_db,
             plot_roc_dc,
         )
 
-        plot_learning_curves(
-            history.to_dict(),
-            output_dir = Path(config["output"]["plots_dir"]),
-        )
+        out_plot_dir = Path(config["output"]["plots_dir"])
 
-        plot_roc_db(
-            model      = gn2_model,
-            loader     = val_loader,
-            device     = device,
-            output_dir = Path(config["output"]["plots_dir"]),
-        )
-        plot_roc_dc(
-            model      = gn2_model,
-            loader     = val_loader,
-            device     = device,
-            output_dir = Path(config["output"]["plots_dir"]),
-        )
+        plot_learning_curves(history.to_dict(), output_dir=out_plot_dir)
+        plot_roc_db(model=gn2_model, loader=val_loader, device=device, output_dir=out_plot_dir)
+        plot_roc_dc(model=gn2_model, loader=val_loader, device=device, output_dir=out_plot_dir)
+
+    # evaluate
+    eval_output_dir = Path(config["output"].get("eval_dir", "outputs/eval"))
+
+    evaluate(
+        config          = config,
+        checkpoint_path = Path(config["output"].get("checkpoints_dir",
+                            "outputs/checkpoints")) / "best_model.pt",
+        output_dir      = eval_output_dir,
+        device          = device,
+    )
+
+
+if __name__ == "__main__":
+    main()

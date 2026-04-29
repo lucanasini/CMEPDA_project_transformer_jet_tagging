@@ -148,6 +148,7 @@ def load_config_json(filepath):
     """
     try:
         with open(filepath, encoding="utf-8") as f:
+            logger.info("Config loaded: %s", filepath)
             return json.load(f)
     except FileNotFoundError:
         logger.error("Config file not found: %s", filepath)

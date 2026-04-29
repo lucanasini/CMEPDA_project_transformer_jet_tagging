@@ -26,7 +26,7 @@ CMEPDA_project_transformer_jet_tagging/
 │   └── config.json                 ← all hyperparams and settings
 ├── dataset/
 │   └── mc-flavtag-ttbar-*.h5       ← put here the .h5 file
-├── src/trasformer_jet_tagging/
+├── src/transformer_jet_tagging/
 │   ├── __init__.py                 ← package init
 │   ├── _version.py                 ← package version
 │   ├── constants.py                ← feature names, class mapping
@@ -110,10 +110,10 @@ cp /path/to/your/file.h5 data/file_name.h5
 
 The expected structure of the HDF5 file is:
 ```
-/jets          — variables jet-level (structured array)
-/tracks        — variables track-level (structured array)
-/eventwise     — variables events
-/truth_hadrons — info truth hadron
+/jets          - variables jet-level (structured array)
+/tracks        - variables track-level (structured array)
+/eventwise     - variables events
+/truth_hadrons - info truth hadron
 ```
 
 Update the file name in
@@ -121,12 +121,22 @@ Update the file name in
 
 ---
 
-## Execution
-
-### Full training (default config)
-
+## Usage:
+Install the package:
 ```bash
-python main.py --config configs/config.json
+pip install -e .
+```
+Then run:
+```bash
+python -m transformer_jet_tagging [OPTIONS]
+```
+
+### Options:
+```
+-h, --help           Show help message and exit
+--version            Show version
+--config CONFIG      Path to the JSON config file (default: `outputs/checkpoints/`)
+--debug-frac FLOAT   Fraction of data to use (default: 1.0)
 ```
 
 ---

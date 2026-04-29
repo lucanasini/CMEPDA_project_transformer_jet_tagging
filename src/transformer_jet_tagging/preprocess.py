@@ -37,9 +37,16 @@ from . import utils
 logger = logging.getLogger("GN2.preprocess")
 
 
-
 def save_indices(output_dir: Path, train: np.ndarray, val: np.ndarray, test: np.ndarray) -> None:
-    """Save train / val / test index arrays as .npy files."""
+    """
+    Save train / val / test index arrays as .npy files.
+
+    Args:
+        output_dir (Path): Base directory to save indices.
+        train (np.ndarray): Array of training indices.
+        val (np.ndarray): Array of validation indices.
+        test (np.ndarray): Array of test indices.
+    """
     idx_dir = output_dir / "indices"
     idx_dir.mkdir(parents=True, exist_ok=True)
 
@@ -54,39 +61,57 @@ def save_indices(output_dir: Path, train: np.ndarray, val: np.ndarray, test: np.
 
 
 def save_norm_stats(output_dir: Path, norm_stats: dict) -> None:
-    """Serialize norm stats (numpy arrays) to JSON."""
+    """
+    Serialize norm stats (numpy arrays) to JSON.
+    
+    Args:
+        output_dir (Path): Directory to save the norm_stats.json file.
+        norm_stats (dict): Dictionary of normalization stats
+            ({"jet_pt": {"mu": ..., "sigma": ...}, ...}).
+            Values should be numpy arrays.
+    """
     output_dir.mkdir(parents=True, exist_ok=True)
     out_path = output_dir / "norm_stats.json"
 
     with open(out_path, "w", encoding="utf-8") as f:
-        json.dump({k: v.tolist() for k, v in norm_stats.items()}, f, indent=2)
+        json.dump({k: v.tolist() for k, v in norm_stats.items()}, f, indent=4)
 
     logger.info("Normalization stats saved to %s", out_path)
 
 
-def run_preprocess(config_path: str):
+def run_preprocess(config_path: str) -> None:
+    """
+    Run the preprocessing pipeline.
 
+    Args:
+        config_path (str): Path to the JSON configuration file.
+    
+    Raises:
+        FileNotFoundError: If the specified HDF5 file is not found.
+        KeyError: If expected datasets are missing from the HDF5 file.
+    """
     # 1. load configuration
     config = utils.load_config_json(config_path)
+    data_config = config["data"]
 
-    file_path   = config["data"]["h5_path"]
-    pt_min      = config["data"]["pt_min_mev"]
-    pt_max      = config["data"]["pt_max_mev"]
-    eta_max     = config["data"]["eta_max"]
-    split_fracs = (
-        config["data"]["train_fraction"],
-        config["data"]["val_fraction"],
-        config["data"]["test_fraction"],
+    file_path   = data_config["data"]["h5_path"]
+    pt_min      = data_config["data"]["pt_min_mev"]
+    pt_max      = data_config["data"]["pt_max_mev"]
+    eta_max     = data_config["data"]["eta_max"]
+    train_frac, val_frac, test_frac = (
+        data_config["data"]["train_fraction"],
+        data_config["data"]["val_fraction"],
+        data_config["data"]["test_fraction"],
     )
-    shuffle     = config["data"].get("shuffle", False)
-    seed        = config["data"].get("split_seed", 42)
-    jet_vars    = config["data"]["jet_features"]
-    track_vars  = config["data"]["track_features"]
-    batch_size  = config["data"].get("batch_size", 10_000)
-    output_dir  = Path(config["output"]["preprocess_dir"])
+    shuffle     = data_config["data"].get("shuffle", False)
+    seed        = data_config["data"].get("split_seed", 42)
+    jet_vars    = data_config["data"]["jet_features"]
+    track_vars  = data_config["data"]["track_features"]
+    batch_size  = data_config["data"].get("batch_size", 10_000)
+    output_dir  = Path(data_config["output"]["preprocess_dir"])
 
     # 2. kinematic selection
-    logger.info("Reading kinematics from %s ...", {file_path})
+    logger.info("Reading kinematics from %s ...", file_path)
     try:
         with h5py.File(file_path, "r") as f:
             pt  = f["jets"]["pt"][:]
@@ -103,12 +128,7 @@ def run_preprocess(config_path: str):
     logger.info("Jets passing kinematic selection: %s / %s",
                 f"{len(valid_indices):,}", f"{len(pt):,}")
 
-    # 3. train / val / test split
-    train_frac = split_fracs[0]
-    val_frac   = split_fracs[1]
-    test_frac  = split_fracs[2]
-
-    training_indices, test_indices = train_test_split(
+    train_val_indices, test_indices = train_test_split(
         valid_indices,
         train_size   = train_frac + val_frac,
         test_size    = test_frac,
@@ -116,14 +136,14 @@ def run_preprocess(config_path: str):
         shuffle      = shuffle,
     )
     train_indices, val_indices = train_test_split(
-        training_indices,
+        train_val_indices,
         train_size   = train_frac / (train_frac + val_frac),
         random_state = seed,
         shuffle      = shuffle,
     )
     save_indices(output_dir, train_indices, val_indices, test_indices)
 
-    # 4. Normalization statistics - computed on training set ONLY
+    # 3. Normalization statistics - computed on training set ONLY
     logger.info("Computing normalization statistics on training set ...")
     norm_stats = utils.compute_normalization_stats(
         file_path     = file_path,
