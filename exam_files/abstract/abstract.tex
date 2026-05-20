@@ -1,0 +1,38 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[italian]{babel}
+\usepackage{geometry}
+\usepackage{amsmath}
+\usepackage{parskip}
+
+\geometry{top=2.5cm, bottom=2.5cm, left=3cm, right=3cm}
+
+\title{GN2: Classificazione del Jet Flavour tramite Transformer}
+\date{\today}
+\author{Luca Nasini}
+
+\begin{document}
+
+\maketitle
+
+\vspace{4pt}
+\hrule
+\vspace{10pt}
+
+\begin{abstract}
+Il \textit{jet flavour tagging} consiste nel classificare i jet adronici prodotti in collisioni protone-protone in base al \textit{flavour} del partone d'origine:
+quark bottom ($b$), quark charm ($c$), decadimento adronico del leptone $\tau$, oppure quark leggero o gluone.
+Il progetto implementa \textbf{GN2}, un algoritmo di classificazione basato su transformer, come pipeline PyTorch autonoma e completamente configurabile, proposto dalla Collaborazione ATLAS e impiegato nell'analisi dei dati di Run~2 e Run~3,
+
+L'implementazione copre l'intero flusso di lavoro del machine learning, dal preprocessing fino alla valutazione del modello.
+Le variabili di jet e di traccia vengono lette da file HDF5 di simulazione tramite un data loader ottimizzato per l'I/O.
+Una fase di preprocessing applica tagli di selezione cinematica, esegue una suddivisione di train/val/test e calcola le statistiche di normalizzazione.
+Il modello GN2 elabora ciascun jet attraverso una rete di inizializzazione per-traccia, un encoder transformer multi-layer e head attention, uno step di attention pooling che produce una rappresentazione globale del jet, e una classification head che restituisce quattro probabilità di classe $(p_b, p_c, p_u, p_\tau)$.
+Il training utilizza l'ottimizzatore AdamW con uno schedule di learning identico a quello proposto da ATLAS.
+L'evaluation produce ROC curve per i discriminanti di $b$-tagging e $c$-tagging ($D_b$ e $D_c$).
+
+L'architettura contiene circa $230\,000$ parametri addestrabili e non include i due obiettivi di addestramento ausiliari del modello completo di ATLAS (classificazione dell'origine delle tracce e raggruppamento per vertice comune), ma possono essere implementati facilmente in un futuro sviluppo.
+\end{abstract}
+
+\end{document}

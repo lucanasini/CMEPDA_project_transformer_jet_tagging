@@ -1,0 +1,88 @@
+{
+    "data": {
+        "h5_path": "dataset/mc-flavtag-ttbar-small.h5",
+
+        "max_tracks": 40,
+
+        "jet_features": [
+            "pt",
+            "eta"
+        ],
+        "track_features": [
+            "qOverP", "deta", "dphi", "d0", "z0SinTheta",
+            "qOverPUncertainty", "thetaUncertainty", "phiUncertainty",
+            "lifetimeSignedD0Significance", "lifetimeSignedZ0SinThetaSignificance",
+            "numberOfPixelHits", "numberOfSCTHits", "numberOfInnermostPixelLayerHits",
+            "numberOfNextToInnermostPixelLayerHits", "numberOfInnermostPixelLayerSharedHits",
+            "numberOfInnermostPixelLayerSplitHits", "numberOfPixelSharedHits",
+            "numberOfPixelSplitHits","numberOfSCTSharedHits"
+        ],
+        "label": "HadronConeExclTruthLabelID",
+        "label_map": {
+            "5":  0,
+            "4":  1,
+            "0":  2,
+            "15": 3
+        },
+        "flavour_map": {
+            "0": "b-jet",
+            "1": "c-jet",
+            "2": "light-jet",
+            "3": "tau-jet"
+        },
+
+        "pt_min_mev": 20000.0,
+        "pt_max_mev": 250000.0,
+        "eta_max":    2.5,
+
+        "train_fraction": 0.7,
+        "val_fraction":   0.2,
+        "test_fraction":  0.1,
+
+        "drop_last": false,
+        "shuffle": true,
+        "split_seed": 42,
+        "norm_batch_size": 10000
+    },
+    "model": {
+        "initialiser_hidden_dim": 64,
+        "initialiser_output_dim": 64,
+        "transformer_n_layers": 4,
+        "transformer_n_heads": 8,
+        "transformer_embed_dim": 64,
+        "transformer_ff_dim": 256,
+        "transformer_dropout": 0.0,
+        "pooling_dim": 64,
+        "head_hidden_dims": [
+            128,
+            64,
+            32
+        ],
+        "activation": "relu"
+    },
+    "training": {
+        "max_epochs": 21,
+        "batch_size": 2048,
+        "num_workers": 8,
+        "optimizer": "adamw",
+        "weight_decay": 1.0e-05,
+        "lr_initial": 1.0e-07,
+        "lr_peak": 0.0005,
+        "lr_final": 1.0e-05,
+        "warmup_frac": 0.01,
+        "device": "cuda"
+    },
+    "discriminant": {
+        "fc_btag": 0.2,
+        "ftau_btag": 0.05,
+        "fb_ctag": 0.3,
+        "ftau_ctag": 0.01
+    },
+    "output": {
+        "preprocess_dir": "outputs/preprocess",
+        "save_plots": false,
+        "plots_dir": "outputs/data_statistics",
+        "checkpoints_dir": "outputs/checkpoints",
+        "evaluate_dir": "outputs/eval"
+    }
+}

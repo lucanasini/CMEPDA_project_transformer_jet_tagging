@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12"]
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+    - uses: actions/cache@v4
+      with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/pyproject.toml') }}
+    - name: Install
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[dev]"
+    - name: Install PyTorch (CPU for CI)
+      run: pip install torch --index-url https://download.pytorch.org/whl/cpu
+    - name: Lint
+      run: |
+        ruff check .
+    - name: Unit tests
+      run: |
+        python -m pytest

@@ -1,0 +1,240 @@
+"""
+__main__.py
+===========
+Entry point for the transformer_jet_tagging package.
+"""
+
+import argparse
+import logging
+from pathlib import Path
+
+import numpy as np
+import torch
+
+from . import __version__
+from .dataset import GN2Dataset, gn2_dataloader
+from .evaluate import evaluate
+from .model import GN2
+from .train import train
+from .utils import (
+    artifact_paths,
+    check_artifacts,
+    get_device,
+    load_config_json,
+    load_indices,
+    load_norm_stats,
+    parse_label_map,
+)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+logger = logging.getLogger("GN2           ")
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        prog="transformer_jet_tagging",
+        description="GN2 transformer jet tagging pipeline",
+    )
+
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=__version__,
+    )
+
+    parser.add_argument(
+        "--config",
+        type=str,
+        default="configs/config.json",
+        help="Path to the JSON configuration file.",
+    )
+
+    parser.add_argument(
+        "--evaluate",
+        action="store_true",
+        help="Run evaluation on the test set instead of training.",
+    )
+
+    parser.add_argument(
+        "--debug-frac",
+        type=float,
+        default=1.0,
+        help="Fraction of data to use",
+    )
+
+    args = parser.parse_args()
+
+    config_path = Path(args.config)
+    debug_frac  = args.debug_frac
+
+    # load configuration
+    config = load_config_json(config_path)
+
+    file_path      = Path(config["data"]["h5_path"])
+    preprocess_dir = Path(config["output"]["preprocess_dir"])
+
+    jet_vars   = config["data"]["jet_features"]
+    track_vars = config["data"]["track_features"]
+    label_vars = config["data"]["label"]
+    label_map  = parse_label_map(config["data"]["label_map"])
+
+    batch_size  = config["training"].get("batch_size", 1024)
+    shuffle_var = config["data"].get("shuffle", False)
+
+    # preprocessing
+    paths = artifact_paths(preprocess_dir)
+    if not check_artifacts(list(paths.values())):
+        logger.info("Preprocessing not found: running preprocess")
+        from .preprocess import run_preprocess
+        run_preprocess(config)
+
+    if not check_artifacts(list(paths.values())):
+        raise FileNotFoundError("Preprocessing failed: artifacts still missing.")
+
+    train_indices, val_indices, test_indices = load_indices(preprocess_dir)
+    norm_stats = load_norm_stats(preprocess_dir)
+
+    if debug_frac < 1.0:
+        rng = np.random.default_rng(seed=42)
+
+        train_indices = rng.choice(
+            train_indices,
+            size=int(len(train_indices) * debug_frac),
+            replace=False,
+        )
+        val_indices = rng.choice(
+            val_indices,
+            size=int(len(val_indices) * debug_frac),
+            replace=False,
+        )
+        test_indices = rng.choice(
+            test_indices,
+            size=int(len(test_indices) * debug_frac),
+            replace=False,
+        )
+
+        logger.info("Debug mode: %s", f"{debug_frac:.1%}")
+
+    train_indices = np.sort(train_indices)
+    val_indices   = np.sort(val_indices)
+    test_indices  = np.sort(test_indices)
+
+    logger.info(
+        "Train=%s, Val=%s, Test=%s",
+        f"{len(train_indices):,}",
+        f"{len(val_indices):,}",
+        f"{len(test_indices):,}",
+    )
+
+    # datasets and dataloaders
+    common_kwargs = dict(
+        h5_file_path    = file_path,
+        max_tracks      = config["data"].get("max_tracks", 40),
+        jet_vars        = jet_vars,
+        track_vars      = track_vars,
+        jet_flavour     = label_vars,
+        jet_flavour_map = label_map,
+        stats           = norm_stats,
+    )
+
+    loader_kwargs = dict(
+        batch_size  = batch_size,
+        num_workers = config["training"].get("num_workers", 0),
+        pin_memory  = config["training"].get("device", "auto") in ("gpu", "auto")
+                      and torch.cuda.is_available(),
+        drop_last   = config["data"].get("drop_last", False),
+    )
+
+    train_dataset = GN2Dataset(jet_indices=train_indices, **common_kwargs)
+    val_dataset   = GN2Dataset(jet_indices=val_indices,   **common_kwargs)
+    test_dataset  = GN2Dataset(jet_indices=test_indices,  **common_kwargs)
+
+    train_loader = gn2_dataloader(train_dataset, **loader_kwargs, shuffle=shuffle_var)
+    val_loader   = gn2_dataloader(val_dataset,   **loader_kwargs, shuffle=False)
+    test_loader  = gn2_dataloader(test_dataset,  **loader_kwargs, shuffle=False)
+
+    if config["output"].get("save_plots", False):
+        from .plotting import plot_statistics
+
+        plot_statistics(
+            h5_path         = file_path,
+            jet_vars        = jet_vars,
+            track_vars      = track_vars,
+            jet_flavour     = label_vars,
+            jet_flavour_map = label_map,
+            jet_indices     = train_indices,
+            output_dir      = Path(config["output"].get("plots_dir", "outputs/plots")),
+            n_jets_track    = int(len(train_indices)*0.1),
+        )
+
+    # debug batch
+    batch = next(iter(train_loader))
+    logger.debug("Jets:   %s", batch["jet_features"].shape)
+    logger.debug("Tracks: %s", batch["track_features"].shape)
+    logger.debug("Labels: %s", batch["label"].shape)
+
+    device = get_device(config["training"].get("device", "auto"))
+    checkpoint_path = Path(config["output"].get("checkpoints_dir", "outputs/checkpoints"))
+    if not args.evaluate:
+
+        # model
+        model_config = config.get("model", {})
+        gn2_model = GN2(
+            n_jet_vars       = len(jet_vars),
+            n_track_vars     = len(track_vars),
+            n_classes        = len(label_map),
+            init_hidden_dim  = model_config.get("initialiser_hidden_dim"),
+            init_output_dim  = model_config.get("initialiser_output_dim"),
+            embed_dim        = model_config.get("transformer_embed_dim"),
+            n_heads          = model_config.get("transformer_n_heads"),
+            n_layers         = model_config.get("transformer_n_layers"),
+            ff_dim           = model_config.get("transformer_ff_dim"),
+            pool_dim         = model_config.get("pooling_dim"),
+            dropout          = model_config.get("transformer_dropout"),
+            head_hidden_dims = model_config.get("head_hidden_dims"),
+            activation       = model_config.get("activation"),
+        ).to(device)
+
+        # training
+        training_config = config.get("training", {})
+        train(
+            model        = gn2_model,
+            train_loader = train_loader,
+            val_loader   = val_loader,
+            output_dir   = checkpoint_path,
+            device       = device,
+            optimizer    = training_config.get("optimizer"),
+            max_epochs   = training_config.get("max_epochs"),
+            warmup_frac  = training_config.get("warmup_frac"),
+            weight_decay = training_config.get("weight_decay"),
+            lr_initial   = training_config.get("lr_initial"),
+            lr_peak      = training_config.get("lr_peak"),
+            lr_final     = training_config.get("lr_final"),
+            config       = config,
+        )
+
+        checkpoint_path = sorted(Path(checkpoint_path / "runs").glob("*/best_model.pt"))[-1]
+
+    else:
+        checkpoint_path = checkpoint_path / "best_model/best_model.pt"
+
+    # evaluation
+    evaluate(
+        test_loader     = test_loader,
+        checkpoint_path = checkpoint_path,
+        output_dir      = Path(config["output"].get("evaluate_dir", "outputs/eval")),
+        device          = device,
+        flavour_map     = config["data"]["flavour_map"],
+        fc              = config["discriminant"]["fc_btag"],
+        ftau_b          = config["discriminant"]["ftau_btag"],
+        fb              = config["discriminant"]["fb_ctag"],
+        ftau_c          = config["discriminant"]["ftau_ctag"],
+    )
+
+
+
+if __name__ == "__main__":
+    main()
