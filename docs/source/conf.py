@@ -11,7 +11,6 @@ __package_name__ = "CMEPDA_project_transformer_jet_tagging"
 # Get package metadata.
 _metadata = importlib.metadata.metadata(__package_name__)
 
-autodoc_mock_imports = ["torch"]
 
 
 # --- Project information ---
