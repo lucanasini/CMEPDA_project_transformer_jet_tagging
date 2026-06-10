@@ -130,7 +130,6 @@ class AttentionPooling(nn.Module):
 
     Attributes:
         d_in (int): input embedding dimension (from transformer)
-        d_out (int): output embedding dimension (for jet representation)
     """
     def __init__(
         self,
@@ -159,7 +158,7 @@ class AttentionPooling(nn.Module):
                 ``True`` = real track, ``False`` = padding
         
         Returns:
-            (torch.Tensor): shape ``(B, d_out)``, pooled jet representation
+            (torch.Tensor): shape ``(B, d_in)``, pooled jet representation
         """
         scores = self.query(x).squeeze(-1)          # (B, T), attention scores for each track
         if padding_mask is not None:
@@ -282,7 +281,7 @@ class GN2(nn.Module):
 
         self.activation = activation
 
-        # 1. Per-track initialiser (1 hidden layer + output, both size `embed_dim`)
+        # 1. Per-track initialiser (1 hidden layer + output, size `init_hidden_dim` and `init_output_dim`)
         self.track_init = nn.Sequential(
             nn.Linear(in_dim, init_hidden_dim),
             get_activation(activation),

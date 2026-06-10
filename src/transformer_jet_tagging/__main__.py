@@ -176,7 +176,7 @@ def main():
     logger.debug("Tracks: %s", batch["track_features"].shape)
     logger.debug("Labels: %s", batch["label"].shape)
 
-    device = get_device(config["training"].get("device", "auto"))
+    device = get_device(config["training"].get("device", "cpu"))
     checkpoint_path = Path(config["output"].get("checkpoints_dir", "outputs/checkpoints"))
     if not args.evaluate:
 

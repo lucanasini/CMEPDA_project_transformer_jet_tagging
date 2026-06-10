@@ -65,7 +65,7 @@ def _load_jet_data(
                 data[var] = jets[var].astype(np.float32)
             raw_labels = jets[jet_flavour].astype(int)
             data["label"] = np.array(
-                [jet_flavour_map.get(label, 0) for label in raw_labels], dtype=np.int32
+                [jet_flavour_map.get(label, -1) for label in raw_labels], dtype=np.int32
             )
     except FileNotFoundError:
         logger.error("HDF5 file not found: %s", h5_path)
@@ -118,7 +118,7 @@ def _load_track_data(
             tracks_raw = f["tracks"][sorted_idx]
             raw_labels = jets_raw[jet_flavour].astype(int)
             labels     = np.array(
-                [jet_flavour_map.get(label, 0) for label in raw_labels], dtype=np.int32
+                [jet_flavour_map.get(label, -1) for label in raw_labels], dtype=np.int32
             )
 
             has_valid = "valid" in tracks_raw.dtype.names

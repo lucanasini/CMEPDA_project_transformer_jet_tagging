@@ -115,7 +115,7 @@ def run_preprocess(config: dict) -> None:
         ValueError: If the train/val/test fractions do not sum to 1.
     """
     # 1. load configuration
-    data_config   = config["data"]
+    data_config = config["data"]
     output_dir = Path(config["output"]["preprocess_dir"])
 
     file_path  = Path(data_config["h5_path"])
@@ -164,7 +164,6 @@ def run_preprocess(config: dict) -> None:
     train_val_indices, test_indices = train_test_split(
         valid_indices,
         train_size   = train_frac + val_frac,
-        test_size    = test_frac,
         random_state = seed,
         shuffle      = shuffle,
     )
